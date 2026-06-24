@@ -4,7 +4,7 @@
 
 ---
 
-## Status: Planning Phase — Ready to code once open questions are resolved
+## Status: Coding Phase — Ingestion Agent complete, Agent 1 next
 
 ---
 
@@ -13,11 +13,15 @@
 - [x] Explored TC_MASTER and HIS_EXEC_REPORT schema
 - [x] Confirmed full 7-label taxonomy from manager slide (Performance + Sync split from ENV-ISSUE)
 - [x] Extracted domain rules from manager conversation transcripts (both sessions)
-- [x] Decided on multi-agent architecture over traditional ML
-- [x] Identified the 24 unlabeled non-PASSED rows as the immediate classification target
+- [x] Decided on multi-agent architecture (RAG pipeline + 3 agents) over traditional ML
 - [x] Built `analysis.ipynb` for data exploration
 - [x] Connected to live Oracle DB (`AUTOBOT_DEV` on `ny-oracle-ee11:1521`)
-- [x] Confirmed FAILURE_REMARKS sparsity (59/13,624) is permanent — not a snapshot issue
+- [x] Confirmed live DB has 785,166 rows (CSV was a small slice — 13,624 rows)
+- [x] Knowledge base confirmed: 62,144 labeled rows after filtering
+- [x] Target rows confirmed: 226,080 unlabeled non-PASSED rows to classify
+- [x] FAILURE_REMARKS is 24.4% populated in live DB (191,912 rows) — far better than CSV's 0.4%
+- [x] Built `agents/ingestion_agent.py` — single DB access layer for all agents
+- [x] Documented full system architecture in `documentation/decisions/system-architecture.md`
 - [x] Identified platform filter: use only Prisma/Ignitia EXEC_IDs; exclude 1P
 - [x] Identified component filter: exclude rows where J_COMPONENT starts with "OP"
 - [x] Confirmed DATA-ISSUE labels cannot be predicted from FAILURE_REMARKS (label assigned post-local-investigation, not from raw error text)

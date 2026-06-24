@@ -2,32 +2,99 @@
 Ingestion Agent
 ---------------
 Connects to the live Oracle DB and exposes TC_MASTER and HIS_EXEC_REPORT
-as DataFrames. Acts as the single data source for all other agents.
+as clean, filtered DataFrames. Acts as the single data source for all
+other agents in the RAG pipeline.
+
+Features:
+  - Fetches once and caches in memory (no double DB hits)
+  - Saves to local parquet cache so subsequent runs skip the 4-min pull
+  - Normalises dirty AUTO_FAILURE_REASON labels before returning knowledge base
+  - Applies all platform/component filters in one place
 
 Usage (import):
     from agents.ingestion_agent import IngestionAgent
-    agent = IngestionAgent()
-    tc_master    = agent.fetch_tc_master()
-    his_exec     = agent.fetch_his_exec_report()
-    reference_df = agent.build_reference_table()
+
+    agent = IngestionAgent()           # uses local cache if available
+    agent = IngestionAgent(fresh=True) # forces re-fetch from DB
+
+    kb      = agent.get_knowledge_base()   # 62K labeled rows (clean)
+    targets = agent.get_target_rows()      # 226K unlabeled rows
     agent.close()
 
 Usage (standalone):
-    python agents/ingestion_agent.py
+    python agents/ingestion_agent.py          # uses cache
+    python agents/ingestion_agent.py --fresh  # re-fetches from DB
 """
 
 import os
+import sys
+import time
 import oracledb
 import pandas as pd
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# ------------------------------------------------------------------
+# Paths
+# ------------------------------------------------------------------
+CACHE_DIR       = Path(__file__).parent.parent / "data" / "cache"
+TC_CACHE        = CACHE_DIR / "tc_master.parquet"
+HIS_CACHE       = CACHE_DIR / "his_exec_report.parquet"
+REFERENCE_CACHE = CACHE_DIR / "reference_table.parquet"
+
+# ------------------------------------------------------------------
+# Dirty label normalization map
+# Maps any non-standard AUTO_FAILURE_REASON value → canonical label
+# ------------------------------------------------------------------
+LABEL_MAP = {
+    # Typos / case variants
+    "DATA-ISSUEDATA-ISSUE" : "DATA-ISSUE",
+    "DatA-ISSUE"           : "DATA-ISSUE",
+    "APP-CHNAGE"           : "APP-CHANGE",
+    "Script Issue"         : "SCRIPT-ISSUE",
+    "Sync Issue"           : "ENV-ISSUE",
+    "Sync issue"           : "ENV-ISSUE",
+    "SCRIPT-MAINTAIN"      : "SCRIPT-ISSUE",
+    "SCRIPT-MAINTAINED"    : "SCRIPT-ISSUE",
+    "DATA-MAINTAINED"      : "DATA-ISSUE",
+    # Free-text remarks accidentally saved as labels
+    "Passed on rerun"      : "ENV-ISSUE",
+    "Passed locally"       : "ENV-ISSUE",
+    "passed manually"      : "ENV-ISSUE",
+    "Locally passed"       : "ENV-ISSUE",
+    "MAINTAINED"           : "ENV-ISSUE",
+    "MAINTAIN"             : "SCRIPT-ISSUE",
+    "BLOCKED"              : "ENV-ISSUE",
+    "OOS"                  : "APP-CHANGE",
+    # Noise labels — exclude from knowledge base
+    "NOT-RUN"              : None,
+    "DAY-1"                : None,
+    "IMPROVEMENT"          : None,
+    "Baseline updated for Print CI" : None,
+    "BASELINE Updated"     : None,
+    "Table locator issue, updated same" : None,
+    "Moved Test case to maintaince"     : None,
+}
+
+# Valid canonical labels — rows with anything else are dropped from KB
+VALID_LABELS = {
+    "APP-ISSUE",
+    "APP-CHANGE",
+    "SCRIPT-ISSUE",
+    "DATA-ISSUE",
+    "ENV-ISSUE",
+}
+
 
 class IngestionAgent:
 
-    def __init__(self):
-        self.connection = None
+    def __init__(self, fresh: bool = False):
+        self.connection  = None
+        self._reference  = None   # in-memory cache
+        self._fresh      = fresh
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
         self._connect()
 
     # ------------------------------------------------------------------
@@ -35,11 +102,11 @@ class IngestionAgent:
     # ------------------------------------------------------------------
 
     def _connect(self):
-        user     = os.getenv("DB_USER")
-        password = os.getenv("DB_PASSWORD")
-        host     = os.getenv("DB_HOST")
-        port     = os.getenv("DB_PORT", "1521")
-        service  = os.getenv("DB_SERVICE")
+        user    = os.getenv("DB_USER")
+        password= os.getenv("DB_PASSWORD")
+        host    = os.getenv("DB_HOST")
+        port    = os.getenv("DB_PORT", "1521")
+        service = os.getenv("DB_SERVICE")
 
         if not all([user, password, host, service]):
             raise EnvironmentError(
@@ -49,7 +116,7 @@ class IngestionAgent:
 
         dsn = f"{host}:{port}/{service}"
         self.connection = oracledb.connect(user=user, password=password, dsn=dsn)
-        print(f"[IngestionAgent] Connected → {host}/{service} as {user}")
+        print(f"[IngestionAgent] Connected  → {host}/{service} as {user}")
 
     def close(self):
         if self.connection:
@@ -57,42 +124,61 @@ class IngestionAgent:
             print("[IngestionAgent] Connection closed.")
 
     # ------------------------------------------------------------------
-    # Table fetchers
+    # Internal: DB fetch
     # ------------------------------------------------------------------
 
-    def _query_to_df(self, query: str) -> pd.DataFrame:
-        """Execute a query and return results as a DataFrame using cursor (no SQLAlchemy needed)."""
-        with self.connection.cursor() as cursor:
-            cursor.execute(query)
-            columns = [col[0] for col in cursor.description]
-            rows    = cursor.fetchall()
-        return pd.DataFrame(rows, columns=columns)
+    def _fetch_from_db(self, query: str, label: str) -> pd.DataFrame:
+        t = time.time()
+        print(f"[IngestionAgent] Fetching {label} from DB ...")
+        with self.connection.cursor() as cur:
+            cur.execute(query)
+            cols = [c[0] for c in cur.description]
+            rows = cur.fetchall()
+        df = pd.DataFrame(rows, columns=cols)
+        print(f"[IngestionAgent] {label:<22} → {len(df):,} rows  ({time.time()-t:.1f}s)")
+        return df
+
+    # ------------------------------------------------------------------
+    # Table fetchers (with parquet cache)
+    # ------------------------------------------------------------------
 
     def fetch_tc_master(self) -> pd.DataFrame:
-        """Fetch all rows from TC_MASTER."""
-        df = self._query_to_df("SELECT * FROM TC_MASTER")
-        print(f"[IngestionAgent] TC_MASTER        → {len(df):,} rows, {len(df.columns)} columns")
+        if not self._fresh and TC_CACHE.exists():
+            print(f"[IngestionAgent] TC_MASTER             → loaded from cache")
+            return pd.read_parquet(TC_CACHE)
+        df = self._fetch_from_db("SELECT * FROM TC_MASTER", "TC_MASTER")
+        df.to_parquet(TC_CACHE, index=False)
         return df
 
     def fetch_his_exec_report(self) -> pd.DataFrame:
-        """Fetch all rows from HIS_EXEC_REPORT."""
-        df = self._query_to_df("SELECT * FROM HIS_EXEC_REPORT")
-        print(f"[IngestionAgent] HIS_EXEC_REPORT  → {len(df):,} rows, {len(df.columns)} columns")
+        if not self._fresh and HIS_CACHE.exists():
+            print(f"[IngestionAgent] HIS_EXEC_REPORT       → loaded from cache")
+            return pd.read_parquet(HIS_CACHE)
+        df = self._fetch_from_db("SELECT * FROM HIS_EXEC_REPORT", "HIS_EXEC_REPORT")
+        df.to_parquet(HIS_CACHE, index=False)
         return df
 
     # ------------------------------------------------------------------
-    # Reference table
+    # Reference table (fetched once, cached in memory + disk)
     # ------------------------------------------------------------------
 
     def build_reference_table(self) -> pd.DataFrame:
         """
-        Join TC_MASTER + HIS_EXEC_REPORT on TC_ID into one flat table.
-        This is the master reference used by all downstream agents.
+        Join TC_MASTER + HIS_EXEC_REPORT on TC_ID.
+        Result is cached in memory so subsequent calls are instant.
         """
+        if self._reference is not None:
+            return self._reference
+
+        if not self._fresh and REFERENCE_CACHE.exists():
+            print(f"[IngestionAgent] Reference table       → loaded from cache")
+            self._reference = pd.read_parquet(REFERENCE_CACHE)
+            return self._reference
+
         tc  = self.fetch_tc_master()
         his = self.fetch_his_exec_report()
 
-        reference = his.merge(
+        self._reference = his.merge(
             tc[["TC_ID", "MODULE", "J_COMPONENT", "AUTOMATED_TC_ID",
                 "AUTOMATED_BY_USERID", "FUNC_AREA", "CONTINENT"]],
             on="TC_ID",
@@ -100,67 +186,108 @@ class IngestionAgent:
             suffixes=("", "_master")
         )
 
-        print(f"[IngestionAgent] Reference table   → {len(reference):,} rows, {len(reference.columns)} columns")
-        return reference
+        self._reference.to_parquet(REFERENCE_CACHE, index=False)
+        print(f"[IngestionAgent] Reference table       → {len(self._reference):,} rows, "
+              f"{len(self._reference.columns)} columns")
+        return self._reference
 
     # ------------------------------------------------------------------
-    # Filtered subsets (used by downstream agents)
+    # Label normalization
+    # ------------------------------------------------------------------
+
+    def _normalize_labels(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Apply LABEL_MAP to AUTO_FAILURE_REASON, drop rows with None mapping."""
+        df = df.copy()
+        df["AUTO_FAILURE_REASON"] = (
+            df["AUTO_FAILURE_REASON"]
+            .str.strip()
+            .replace(LABEL_MAP)
+        )
+        # Drop rows whose label maps to None (noise labels)
+        df = df[df["AUTO_FAILURE_REASON"].notna()]
+        # Drop rows whose label is still not in the valid set
+        df = df[df["AUTO_FAILURE_REASON"].isin(VALID_LABELS)]
+        return df
+
+    # ------------------------------------------------------------------
+    # Public API — filtered subsets for downstream agents
     # ------------------------------------------------------------------
 
     def get_knowledge_base(self) -> pd.DataFrame:
         """
-        Returns the clean, filtered labeled rows used as the classifier's
-        knowledge base (training / retrieval reference).
+        Clean, filtered, label-normalized labeled rows.
+        Used by Agent 1 (Retriever) as the searchable knowledge base.
 
-        Filters applied:
-          1. Must have AUTO_FAILURE_REASON (labeled by an engineer)
-          2. Exclude J_COMPONENT starting with 'OP' (1P platform — unreliable labels)
-          3. Exclude INTRIM_STATUS = 'PASSED' (no failure to learn from)
+        Filters:
+          1. Must have AUTO_FAILURE_REASON
+          2. Label normalized + invalid/noise labels dropped
+          3. J_COMPONENT must not start with 'OP' (1P platform — unreliable)
+          4. INTRIM_STATUS must not be 'PASSED'
         """
         df = self.build_reference_table()
 
         # Filter 1 — must be labeled
-        df = df[df["AUTO_FAILURE_REASON"].fillna("").str.strip() != ""]
+        df = df[df["AUTO_FAILURE_REASON"].fillna("").str.strip() != ""].copy()
 
-        # Filter 2 — exclude OP components (1P platform)
+        # Filter 2 — normalize + drop noise labels
+        df = self._normalize_labels(df)
+
+        # Filter 3 — exclude OP components (1P platform)
         df = df[~df["J_COMPONENT"].fillna("").str.upper().str.startswith("OP")]
 
-        # Filter 3 — exclude rows with PASSED status (no failure signal)
+        # Filter 4 — no failure signal on PASSED rows
         df = df[df["INTRIM_STATUS"] != "PASSED"]
 
-        print(f"[IngestionAgent] Knowledge base    → {len(df):,} rows after filtering")
+        print(f"[IngestionAgent] Knowledge base        → {len(df):,} rows (clean, labeled)")
         return df.reset_index(drop=True)
 
     def get_target_rows(self) -> pd.DataFrame:
         """
-        Returns the unlabeled non-PASSED rows that the classifier must predict.
+        Unlabeled non-PASSED rows the classifier must predict.
 
-        Filters applied:
-          1. No AUTO_FAILURE_REASON (unclassified)
-          2. INTRIM_STATUS != PASSED (actual failures, not passing tests)
+        Filters:
+          1. No AUTO_FAILURE_REASON
+          2. INTRIM_STATUS not in passing/inactive states
         """
         df = self.build_reference_table()
 
-        df = df[df["AUTO_FAILURE_REASON"].fillna("").str.strip() == ""]
-        df = df[df["INTRIM_STATUS"] != "PASSED"]
+        exclude_statuses = {"PASSED"}
 
-        print(f"[IngestionAgent] Target rows       → {len(df):,} rows to classify")
+        df = df[df["AUTO_FAILURE_REASON"].fillna("").str.strip() == ""]
+        df = df[~df["INTRIM_STATUS"].isin(exclude_statuses)]
+
+        print(f"[IngestionAgent] Target rows           → {len(df):,} rows to classify")
         return df.reset_index(drop=True)
+
+    def summary(self):
+        """Print a quick summary of both datasets."""
+        ref = self.build_reference_table()
+        kb  = self.get_knowledge_base()
+        tgt = self.get_target_rows()
+
+        print("\n" + "="*55)
+        print("  INGESTION AGENT — DATA SUMMARY")
+        print("="*55)
+        print(f"  Total rows (reference table) : {len(ref):>10,}")
+        print(f"  Knowledge base (labeled)     : {len(kb):>10,}")
+        print(f"  Target rows (to classify)    : {len(tgt):>10,}")
+        print()
+        print("  Knowledge base — label distribution:")
+        for label, cnt in kb["AUTO_FAILURE_REASON"].value_counts().items():
+            print(f"    {label:<20} : {cnt:,}")
+        print()
+        print("  Target rows — INTRIM_STATUS breakdown:")
+        for status, cnt in tgt["INTRIM_STATUS"].value_counts().items():
+            print(f"    {status:<20} : {cnt:,}")
+        print("="*55)
 
 
 # ------------------------------------------------------------------
-# Standalone run — quick sanity check
+# Standalone run
 # ------------------------------------------------------------------
 
 if __name__ == "__main__":
-    agent = IngestionAgent()
-
-    print("\n--- Knowledge Base ---")
-    kb = agent.get_knowledge_base()
-    print(kb[["TC_ID", "JIRA_ID", "INTRIM_STATUS", "AUTO_FAILURE_REASON", "J_COMPONENT"]].head(5))
-
-    print("\n--- Target Rows ---")
-    targets = agent.get_target_rows()
-    print(targets[["TC_ID", "JIRA_ID", "INTRIM_STATUS", "FAILURE_REMARKS", "USER_REMARKS"]].to_string())
-
+    fresh = "--fresh" in sys.argv
+    agent = IngestionAgent(fresh=fresh)
+    agent.summary()
     agent.close()
