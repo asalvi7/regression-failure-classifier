@@ -4,7 +4,7 @@
 
 ---
 
-## Status: Coding Phase — Ingestion Agent complete, Agent 1 next
+## Status: Coding Phase — Retriever Agent complete, building Agent 2 (Analyst)
 
 ---
 
@@ -20,7 +20,9 @@
 - [x] Knowledge base confirmed: 62,144 labeled rows after filtering
 - [x] Target rows confirmed: 226,080 unlabeled non-PASSED rows to classify
 - [x] FAILURE_REMARKS is 24.4% populated in live DB (191,912 rows) — far better than CSV's 0.4%
-- [x] Built `agents/ingestion_agent.py` — single DB access layer for all agents
+- [x] Built `agents/ingestion_agent.py` — single DB access layer with 3-level caching + dirty label normalization
+- [x] Built `agents/retriever_agent.py` — fastembed + FAISS index over 62K KB rows (20.3 min build, cached)
+- [x] Validated retrieval: two distinct modes identified — high-signal (score≥0.80, text match) vs low-signal (score<0.80, no remarks)
 - [x] Documented full system architecture in `documentation/decisions/system-architecture.md`
 - [x] Identified platform filter: use only Prisma/Ignitia EXEC_IDs; exclude 1P
 - [x] Identified component filter: exclude rows where J_COMPONENT starts with "OP"
@@ -50,10 +52,7 @@
    - One-time script or continuous service triggered per regression run?
    - Confidence threshold for "Yet to be analyzed" fallback?
 
-3. **Build Agent 1 — Retriever**
-   - Filter labeled rows to Prisma/Ignitia only, exclude OP components
-   - Embed FAILURE_REMARKS (where available) + USER_REMARKS as fallback
-   - Input: new row → Output: top-5 similar labeled cases
+3. ~~**Build Agent 1 — Retriever**~~ (complete — validating output once index build finishes)
 
 4. **Build Agent 2 — Analyst**
    - Encode all domain rules as system prompt (including platform filter, DATA-ISSUE caveat)
