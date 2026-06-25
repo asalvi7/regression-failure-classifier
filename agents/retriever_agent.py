@@ -1,26 +1,20 @@
 """
-Retriever Agent
----------------
-Agent 1 in the RAG pipeline.
+Retriever Agent (Agent 1)
+-------------------------
+Given any unlabeled failure row, finds the top-K most similar past
+labeled failures from the knowledge base using semantic similarity.
 
-For every target row, finds the top-K most similar past failures from
-the labeled knowledge base using semantic (vector) similarity.
+How it works:
+  1. Converts each KB row into a searchable text string
+     (FAILURE_REMARKS if available, else STATUS + structured fields)
+  2. Encodes all KB rows into vectors using sentence-transformers
+  3. Builds a FAISS index for fast cosine similarity search
+  4. For each query row → returns top-K similar labeled rows as evidence
 
-Two-phase design:
-  1. Index phase  — embed all KB rows once, store as FAISS index on disk
-  2. Query phase  — embed a target row, return top-K labeled neighbors
-
-Text strategy:
-  - Primary : FAILURE_REMARKS  (machine-generated error text)
-  - Fallback : INTRIM_STATUS   (when FAILURE_REMARKS is empty)
-  If USER_REMARKS is also present, it is appended to provide extra context.
-
-Embedding model: all-MiniLM-L6-v2 (384 dims, fast on CPU, good on short text)
-Vector index:    FAISS FlatIP   (inner product on L2-normalised vectors = cosine)
-
-Cache layout (data/cache/):
-  embeddings_index.faiss   — FAISS index
-  embeddings_meta.parquet  — KB rows in index order (for label lookup)
+Caching:
+  - data/cache/embeddings_index.faiss  — FAISS index (skip rebuild)
+  - data/cache/embeddings_meta.parquet — KB metadata in index order
+  - Use RetrieverAgent(fresh=True) or --fresh flag to force rebuild
 
 Usage (import):
     from agents.ingestion_agent import IngestionAgent
@@ -28,38 +22,32 @@ Usage (import):
 
     ingestion = IngestionAgent()
     kb        = ingestion.get_knowledge_base()
-    retriever = RetrieverAgent(kb)                # builds / loads index
+    retriever = RetrieverAgent(kb)
 
     targets   = ingestion.get_target_rows()
     row       = targets.iloc[0]
     neighbors = retriever.query(row, top_k=5)
-    # returns DataFrame with label, similarity_score, and key fields
 
 Usage (standalone):
     python agents/retriever_agent.py          # build index + sample query
     python agents/retriever_agent.py --fresh  # force re-embed
 """
 
-import os
 import sys
 import time
 import numpy as np
 import pandas as pd
 import faiss
 from pathlib import Path
-from sentence_transformers import SentenceTransformer
-
-# Prevents HuggingFace tokenizer from spawning worker processes, which
-# causes a segfault on macOS when encoding large corpora with torch 2.x.
-os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+from fastembed import TextEmbedding
 
 CACHE_DIR        = Path(__file__).parent.parent / "data" / "cache"
 FAISS_INDEX_PATH = CACHE_DIR / "embeddings_index.faiss"
 META_PATH        = CACHE_DIR / "embeddings_meta.parquet"
 
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+BATCH_SIZE = 256
 
-# Columns returned to downstream agents for each retrieved neighbor
 RETURN_COLS = [
     "TC_ID", "EXEC_ID", "JIRA_ID",
     "INTRIM_STATUS", "AUTO_FAILURE_REASON",
@@ -74,22 +62,20 @@ def _get_text(row: pd.Series) -> str:
     user    = str(row.get("USER_REMARKS",    "") or "").strip()
     status  = str(row.get("INTRIM_STATUS",   "") or "").strip()
 
-    if remarks:
-        base = remarks
-    else:
-        base = f"STATUS:{status}"
-
-    if user:
-        return f"{base} | {user}"
-    return base
+    base = remarks if remarks else f"STATUS:{status}"
+    return f"{base} | {user}" if user else base
 
 
 class RetrieverAgent:
 
     def __init__(self, knowledge_base: pd.DataFrame, fresh: bool = False):
-        self._model = SentenceTransformer(MODEL_NAME)
-        self._index: faiss.IndexFlatIP | None = None
-        self._meta:  pd.DataFrame | None      = None
+        print(f"[RetrieverAgent] Loading model: {MODEL_NAME} ...")
+        t = time.time()
+        self._model = TextEmbedding(MODEL_NAME)
+        print(f"[RetrieverAgent] Model loaded ({time.time()-t:.1f}s)")
+
+        self._index = None
+        self._meta  = None
 
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -103,82 +89,67 @@ class RetrieverAgent:
     # ------------------------------------------------------------------
 
     def _build_index(self, kb: pd.DataFrame) -> None:
-        print(f"[RetrieverAgent] Building embeddings index over {len(kb):,} KB rows ...")
+        total = len(kb)
+        print(f"\n[RetrieverAgent] Building index from {total:,} KB rows ...")
         t = time.time()
 
-        texts = [_get_text(row) for _, row in kb.iterrows()]
+        # Step 1 — build text per row
+        print("[RetrieverAgent] Step 1/3 — Building text representations ...")
+        texts         = [_get_text(row) for _, row in kb.iterrows()]
+        has_remarks   = sum(1 for r in texts if not r.startswith("STATUS:"))
+        print(f"[RetrieverAgent]   Remarks-based: {has_remarks:,}  |  Fallback: {total - has_remarks:,}")
 
-        embeddings = self._model.encode(
-            texts,
-            batch_size=64,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            normalize_embeddings=True,   # L2 normalise → dot product = cosine
-        )
+        # Step 2 — encode with progress bar
+        t1 = time.time()
+        print(f"[RetrieverAgent] Step 2/3 — Encoding {total:,} texts ...")
+        embeddings = np.array(list(self._model.embed(texts, batch_size=BATCH_SIZE)), dtype="float32")
+        print(f"[RetrieverAgent]   Encoded in {time.time()-t1:.1f}s  | Shape: {embeddings.shape}")
 
-        dim   = embeddings.shape[1]
-        index = faiss.IndexFlatIP(dim)
-        index.add(embeddings.astype("float32"))
+        # Step 3 — build + save FAISS index
+        t2 = time.time()
+        print("[RetrieverAgent] Step 3/3 — Building FAISS index ...")
+        dim        = embeddings.shape[1]
+        self._index = faiss.IndexFlatIP(dim)
+        self._index.add(embeddings.astype(np.float32))
 
-        faiss.write_index(index, str(FAISS_INDEX_PATH))
+        faiss.write_index(self._index, str(FAISS_INDEX_PATH))
 
-        # Store only the columns we need for lookup
-        keep = [c for c in RETURN_COLS if c in kb.columns]
-        kb[keep].to_parquet(META_PATH, index=False)
+        keep       = [c for c in RETURN_COLS if c in kb.columns]
+        self._meta = kb[keep].reset_index(drop=True)
+        self._meta.to_parquet(META_PATH, index=False)
 
-        self._index = index
-        self._meta  = kb[keep].reset_index(drop=True)
-
-        print(f"[RetrieverAgent] Index built  — {len(kb):,} vectors, dim={dim}  ({time.time()-t:.1f}s)")
-        print(f"[RetrieverAgent] Saved → {FAISS_INDEX_PATH.name}, {META_PATH.name}")
+        total_time = time.time() - t
+        print(f"[RetrieverAgent]   FAISS index: {self._index.ntotal:,} vectors  ({time.time()-t2:.1f}s)")
+        print(f"[RetrieverAgent] Index saved → {FAISS_INDEX_PATH.name}, {META_PATH.name}")
+        print(f"[RetrieverAgent] Total build time: {total_time:.1f}s  ({total_time/60:.1f} min)\n")
 
     def _load_index(self) -> None:
         print("[RetrieverAgent] Loading index from cache ...")
+        t = time.time()
         self._index = faiss.read_index(str(FAISS_INDEX_PATH))
         self._meta  = pd.read_parquet(META_PATH)
-        print(f"[RetrieverAgent] Index loaded  — {self._index.ntotal:,} vectors")
+        print(f"[RetrieverAgent] Index loaded — {self._index.ntotal:,} vectors  ({time.time()-t:.1f}s)")
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
     def query(self, row: pd.Series, top_k: int = 5) -> pd.DataFrame:
-        """
-        Returns the top_k most similar KB rows for the given target row.
-
-        Result DataFrame columns:
-            similarity_score  float  (0-1, higher = more similar)
-            + all RETURN_COLS present in the index metadata
-        """
+        """Returns top_k most similar KB rows for a single target row."""
         text = _get_text(row)
-        vec  = self._model.encode(
-            [text],
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        ).astype("float32")
+        vec  = np.array(list(self._model.embed([text])), dtype="float32")
 
         scores, indices = self._index.search(vec, top_k)
-
         result = self._meta.iloc[indices[0]].copy().reset_index(drop=True)
         result.insert(0, "similarity_score", scores[0].round(4))
         return result
 
-    def query_batch(self, targets: pd.DataFrame, top_k: int = 5) -> list[pd.DataFrame]:
-        """
-        Bulk version of query — encodes all rows at once (faster for large batches).
-        Returns a list of DataFrames, one per target row.
-        """
+    def query_batch(self, targets: pd.DataFrame, top_k: int = 5) -> list:
+        """Bulk search — one pass for all target rows. Returns list of DataFrames."""
         texts = [_get_text(row) for _, row in targets.iterrows()]
-        vecs  = self._model.encode(
-            texts,
-            batch_size=64,
-            show_progress_bar=True,
-            convert_to_numpy=True,
-            normalize_embeddings=True,
-        ).astype("float32")
+        vecs  = np.array(list(self._model.embed(texts, batch_size=BATCH_SIZE)), dtype="float32")
 
         scores_all, indices_all = self._index.search(vecs, top_k)
-
         results = []
         for scores, indices in zip(scores_all, indices_all):
             df = self._meta.iloc[indices].copy().reset_index(drop=True)
@@ -192,11 +163,17 @@ class RetrieverAgent:
 # ------------------------------------------------------------------
 
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent.parent))
     from agents.ingestion_agent import IngestionAgent
 
     fresh = "--fresh" in sys.argv
 
-    ingestion = IngestionAgent()
+    print("="*60)
+    print("  RETRIEVER AGENT — BUILD & TEST")
+    print("="*60)
+    t_total = time.time()
+
+    ingestion = IngestionAgent(fresh=fresh)
     kb        = ingestion.get_knowledge_base()
     targets   = ingestion.get_target_rows()
     ingestion.close()
@@ -204,19 +181,19 @@ if __name__ == "__main__":
     retriever = RetrieverAgent(kb, fresh=fresh)
 
     print("\n" + "="*60)
-    print("  RETRIEVER AGENT — SAMPLE QUERIES")
+    print("  SAMPLE SEARCH — 3 random target rows")
     print("="*60)
-
     sample = targets.sample(3, random_state=42)
     for i, (_, row) in enumerate(sample.iterrows(), 1):
         print(f"\n--- Target {i} ---")
         print(f"  TC_ID          : {row.get('TC_ID')}")
         print(f"  INTRIM_STATUS  : {row.get('INTRIM_STATUS')}")
         print(f"  FAILURE_REMARKS: {str(row.get('FAILURE_REMARKS', ''))[:120]}")
-        print(f"\n  Top-5 neighbors:")
-        neighbors = retriever.query(row, top_k=5)
-        for _, n in neighbors.iterrows():
-            print(f"    [{n['similarity_score']:.3f}] {n['AUTO_FAILURE_REASON']:<15} | "
-                  f"{str(n.get('FAILURE_REMARKS', ''))[:80]}")
+        print(f"  Top-5 matches:")
+        for _, n in retriever.query(row, top_k=5).iterrows():
+            print(f"    [{n['similarity_score']:.3f}]  {n['AUTO_FAILURE_REASON']:<15}  "
+                  f"{str(n.get('FAILURE_REMARKS', ''))[:70]}")
 
-    print("\n" + "="*60)
+    print(f"\n{'='*60}")
+    print(f"  Total wall-clock: {(time.time()-t_total)/60:.1f} min")
+    print(f"{'='*60}")
