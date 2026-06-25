@@ -157,6 +157,7 @@ class IngestionAgent:
         df = self._fetch_from_db("SELECT * FROM HIS_EXEC_REPORT", "HIS_EXEC_REPORT")
         df.to_parquet(HIS_CACHE, index=False)
         return df
+    
 
     # ------------------------------------------------------------------
     # Reference table (fetched once, cached in memory + disk)
