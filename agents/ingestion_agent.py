@@ -54,19 +54,19 @@ LABEL_MAP = {
     "DatA-ISSUE"           : "DATA-ISSUE",
     "APP-CHNAGE"           : "APP-CHANGE",
     "Script Issue"         : "SCRIPT-ISSUE",
-    "Sync Issue"           : "ENV-ISSUE",
-    "Sync issue"           : "ENV-ISSUE",
+    "Sync Issue"           : "SYNC-ISSUE",
+    "Sync issue"           : "SYNC-ISSUE",
     "SCRIPT-MAINTAIN"      : "SCRIPT-ISSUE",
     "SCRIPT-MAINTAINED"    : "SCRIPT-ISSUE",
     "DATA-MAINTAINED"      : "DATA-ISSUE",
     # Free-text remarks accidentally saved as labels
-    "Passed on rerun"      : "ENV-ISSUE",
-    "Passed locally"       : "ENV-ISSUE",
-    "passed manually"      : "ENV-ISSUE",
-    "Locally passed"       : "ENV-ISSUE",
-    "MAINTAINED"           : "ENV-ISSUE",
+    "Passed on rerun"      : "PERF-ISSUE",
+    "Passed locally"       : "PERF-ISSUE",
+    "passed manually"      : "PERF-ISSUE",
+    "Locally passed"       : "PERF-ISSUE",
+    "MAINTAINED"           : "SYNC-ISSUE",
     "MAINTAIN"             : "SCRIPT-ISSUE",
-    "BLOCKED"              : "ENV-ISSUE",
+    "BLOCKED"              : "PERF-ISSUE",
     "OOS"                  : "APP-CHANGE",
     # Noise labels — exclude from knowledge base
     "NOT-RUN"              : None,
@@ -84,7 +84,31 @@ VALID_LABELS = {
     "APP-CHANGE",
     "SCRIPT-ISSUE",
     "DATA-ISSUE",
-    "ENV-ISSUE",
+    "PERF-ISSUE",
+    "SYNC-ISSUE",
+}
+
+# Category map — groups root causes into top-level categories
+CATEGORY_MAP = {
+    "APP-ISSUE"     : "Product Bug",
+    "APP-CHANGE"    : "Product Bug",
+    "DATA-ISSUE"    : "Auto Bug",
+    "SCRIPT-ISSUE"  : "Auto Bug",
+    "PERF-ISSUE"    : "System Issue",
+    "SYNC-ISSUE"    : "System Issue",
+    "YET-TO-ANALYZE": "To Investigate",
+}
+
+# Keywords in USER_REMARKS that signal a Performance Issue
+PERF_KEYWORDS = {
+    "passed on rerun", "passed locally", "locally passed",
+    "passed manually", "slowness", "slow", "intermittent",
+    "flaky", "timing", "timeout", "passed in local",
+}
+
+# Keywords in USER_REMARKS that signal a Sync Issue
+SYNC_KEYWORDS = {
+    "sync", "synchronization", "synchronisation",
 }
 
 
@@ -197,7 +221,7 @@ class IngestionAgent:
     # ------------------------------------------------------------------
 
     def _normalize_labels(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Apply LABEL_MAP to AUTO_FAILURE_REASON, drop rows with None mapping."""
+        """Apply LABEL_MAP, split ENV-ISSUE → PERF-ISSUE/SYNC-ISSUE, drop noise."""
         df = df.copy()
         df["AUTO_FAILURE_REASON"] = (
             df["AUTO_FAILURE_REASON"]
@@ -206,9 +230,37 @@ class IngestionAgent:
         )
         # Drop rows whose label maps to None (noise labels)
         df = df[df["AUTO_FAILURE_REASON"].notna()]
+
+        # Split remaining ENV-ISSUE rows using INTRIM_STATUS + USER_REMARKS
+        env_mask = df["AUTO_FAILURE_REASON"] == "ENV-ISSUE"
+        if env_mask.any():
+            df.loc[env_mask, "AUTO_FAILURE_REASON"] = df[env_mask].apply(
+                self._classify_env_issue, axis=1
+            )
+
         # Drop rows whose label is still not in the valid set
         df = df[df["AUTO_FAILURE_REASON"].isin(VALID_LABELS)]
         return df
+
+    def _classify_env_issue(self, row: pd.Series) -> str:
+        """Split ENV-ISSUE into PERF-ISSUE or SYNC-ISSUE using available signals."""
+        status  = str(row.get("INTRIM_STATUS",  "") or "").strip().upper()
+        remarks = str(row.get("USER_REMARKS",   "") or "").strip().lower()
+
+        # MAINTAINED = fix was applied, passed after → Sync Issue
+        if status == "MAINTAINED":
+            return "SYNC-ISSUE"
+
+        # USER_REMARKS contains sync keywords → Sync Issue
+        if any(kw in remarks for kw in SYNC_KEYWORDS):
+            return "SYNC-ISSUE"
+
+        # USER_REMARKS contains performance keywords → Perf Issue
+        if any(kw in remarks for kw in PERF_KEYWORDS):
+            return "PERF-ISSUE"
+
+        # Default ambiguous ENV-ISSUE → PERF-ISSUE (most common sub-type)
+        return "PERF-ISSUE"
 
     # ------------------------------------------------------------------
     # Public API — filtered subsets for downstream agents

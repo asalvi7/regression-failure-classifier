@@ -46,49 +46,72 @@ VALID_LABELS = {
     "APP-CHANGE",
     "SCRIPT-ISSUE",
     "DATA-ISSUE",
-    "ENV-ISSUE",
+    "PERF-ISSUE",
+    "SYNC-ISSUE",
     "YET-TO-ANALYZE",
+}
+
+CATEGORY_MAP = {
+    "APP-ISSUE"     : "Product Bug",
+    "APP-CHANGE"    : "Product Bug",
+    "DATA-ISSUE"    : "Auto Bug",
+    "SCRIPT-ISSUE"  : "Auto Bug",
+    "PERF-ISSUE"    : "System Issue",
+    "SYNC-ISSUE"    : "System Issue",
+    "YET-TO-ANALYZE": "To Investigate",
 }
 
 SYSTEM_PROMPT = """You are an expert test failure classifier for a software regression testing system.
 
 Your job: given a failed test case and similar past failures, assign one of these labels:
 
-LABELS:
-  APP-ISSUE     — The product/application code has a bug. Test fails due to a defect in the app.
-  APP-CHANGE    — The application behavior changed intentionally (new feature, UI change, config change).
+TAXONOMY:
+  Product Bug:
+    APP-ISSUE   — The product/application code has a bug. Test fails due to a defect in the app.
+    APP-CHANGE  — The application behavior changed intentionally (new feature, UI change, config change).
                   Test is now out of date. INTRIM_STATUS is often OOS (Out of Scope).
-  SCRIPT-ISSUE  — The automation test script itself has a bug or is unmaintained.
-                  Java/Python exceptions in the test code, wrong selectors, missing waits.
-  DATA-ISSUE    — The test data used by the test is wrong or stale. Test passes when data is fixed.
-                  Often identified only after local investigation; may not be obvious from error text.
-  ENV-ISSUE     — Infrastructure/environment problem. Flaky network, server timeout, service down,
-                  test passed on rerun, sync issue between systems.
-  YET-TO-ANALYZE — Not enough signal to classify confidently. Flag for human review.
+
+  Auto Bug:
+    DATA-ISSUE    — The test data used by the test is wrong or stale. Test passes when data is fixed.
+                    Often identified only after local investigation; NOT obvious from error text.
+    SCRIPT-ISSUE  — The automation test script itself has a bug or is unmaintained.
+                    Java/Python exceptions in the test code, wrong selectors, missing waits.
+
+  System Issue:
+    PERF-ISSUE  — Intermittent failure. Test passes on rerun or locally. Slowness/timing issue.
+                  Signals: "passed on rerun", "passed locally", "slowness", "intermittent".
+    SYNC-ISSUE  — Definitive failure due to a sync/environment mismatch. Fix was applied.
+                  Signals: INTRIM_STATUS=MAINTAINED, "sync issue" in remarks.
+
+  To Investigate:
+    YET-TO-ANALYZE — Not enough signal to classify confidently. Flag for human review.
 
 DOMAIN RULES (apply these first before looking at neighbors):
   1. INTRIM_STATUS = OOS        → strong signal for APP-CHANGE
   2. INTRIM_STATUS = FAILED     → strong signal for APP-ISSUE (but check FAILURE_REMARKS)
   3. INTRIM_STATUS = MAINTAIN   → strong signal for SCRIPT-ISSUE or DATA-ISSUE
-  4. INTRIM_STATUS = MAINTAINED → strong signal for ENV-ISSUE
-  5. INTRIM_STATUS = BLOCKED    → strong signal for ENV-ISSUE
+  4. INTRIM_STATUS = MAINTAINED → strong signal for SYNC-ISSUE (fix was applied and passed)
+  5. INTRIM_STATUS = BLOCKED    → strong signal for PERF-ISSUE
   6. Java exception (NullPointerException, ClassCastException, etc.) in FAILURE_REMARKS
      AND INTRIM_STATUS != MAINTAIN → usually SCRIPT-ISSUE
   7. "Row mismatch", "expected vs actual" in FAILURE_REMARKS → DATA-ISSUE
-  8. "passed on rerun", "passed locally", "passed manually" in USER_REMARKS → ENV-ISSUE
-  9. Jira ticket referenced that describes a change → APP-CHANGE
-  10. Assertion failure comparing UI/output data → DATA-ISSUE or APP-CHANGE (check neighbors)
+  8. "passed on rerun", "passed locally", "passed manually" in USER_REMARKS → PERF-ISSUE
+  9. "sync" in USER_REMARKS or INTRIM_STATUS=MAINTAINED → SYNC-ISSUE
+  10. Jira ticket referenced that describes a change → APP-CHANGE
+  11. Assertion failure comparing UI/output data → DATA-ISSUE or APP-CHANGE (check neighbors)
 
 IMPORTANT CAVEATS:
   - DATA-ISSUE is often NOT visible in FAILURE_REMARKS (the error looks like SCRIPT-ISSUE).
     If USER_REMARKS says the data was fixed, trust that over the error text.
+  - PERF-ISSUE vs SYNC-ISSUE: if it passes on rerun → PERF-ISSUE. If fix was applied → SYNC-ISSUE.
   - If similarity scores for neighbors are below 0.80, treat them as weak context only.
     Rely on domain rules and INTRIM_STATUS instead.
   - Never force a label. If genuinely unsure, output YET-TO-ANALYZE.
 
 OUTPUT FORMAT (strict JSON, no extra text):
 {
-  "suggested_label": "<one of the 6 labels>",
+  "suggested_label": "<one of the 7 labels>",
+  "category": "<Product Bug | Auto Bug | System Issue | To Investigate>",
   "confidence": <float 0.0-1.0>,
   "reasoning": "<2-3 sentences explaining the classification>",
   "evidence": ["<signal 1>", "<signal 2>", "<signal 3>"]
@@ -204,6 +227,7 @@ class AnalystAgent:
         except json.JSONDecodeError as e:
             return {
                 "suggested_label" : "YET-TO-ANALYZE",
+                "category"        : "To Investigate",
                 "confidence"      : 0.0,
                 "reasoning"       : f"JSON parse error: {e}",
                 "evidence"        : [],
@@ -217,6 +241,7 @@ class AnalystAgent:
 
         return {
             "suggested_label" : label,
+            "category"        : CATEGORY_MAP.get(label, "To Investigate"),
             "confidence"      : float(data.get("confidence", 0.0)),
             "reasoning"       : str(data.get("reasoning", "")),
             "evidence"        : data.get("evidence", []),

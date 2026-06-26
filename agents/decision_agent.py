@@ -48,12 +48,23 @@ INTRIM_RULES = {
     "OOS"         : "APP-CHANGE",
     "FAILED"      : "APP-ISSUE",
     "MAINTAIN"    : "SCRIPT-ISSUE",   # could also be DATA-ISSUE
-    "MAINTAINED"  : "ENV-ISSUE",
-    "BLOCKED"     : "ENV-ISSUE",
+    "MAINTAINED"  : "SYNC-ISSUE",     # fix was applied and passed → Sync Issue
+    "BLOCKED"     : "PERF-ISSUE",     # couldn't run → environment/perf issue
 }
 
 # Labels where INTRIM_STATUS rule is a strong override signal
 HARD_RULE_STATUSES = {"OOS", "MAINTAINED", "BLOCKED"}
+
+# Category map
+CATEGORY_MAP = {
+    "APP-ISSUE"     : "Product Bug",
+    "APP-CHANGE"    : "Product Bug",
+    "DATA-ISSUE"    : "Auto Bug",
+    "SCRIPT-ISSUE"  : "Auto Bug",
+    "PERF-ISSUE"    : "System Issue",
+    "SYNC-ISSUE"    : "System Issue",
+    "YET-TO-ANALYZE": "To Investigate",
+}
 
 
 class DecisionAgent:
@@ -131,6 +142,7 @@ class DecisionAgent:
     def _verdict(self, tc_id, final_label, confidence, decision, reasoning, flag) -> dict:
         return {
             "tc_id"          : tc_id,
+            "category"       : CATEGORY_MAP.get(final_label, "To Investigate"),
             "final_label"    : final_label,
             "confidence"     : round(confidence, 3),
             "decision"       : decision,      # ACCEPT / REVIEW / REJECT

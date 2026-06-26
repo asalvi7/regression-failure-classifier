@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg0:#111827; --bg1:#1a2232; --bg2:#1f2d42; --bg3:#2d3a4f;
+      --t1:#f1f5f9; --t2:#cbd5e1; --t3:#94a3b8; --t4:#64748b;
+      --brd:rgba(255,255,255,0.07); --brd2:rgba(255,255,255,0.04);
+      --acc:#4f8ef7; --acc-dim:rgba(79,142,247,0.14);
+      --red:#f87171; --red-dim:rgba(248,113,113,0.14); --red-brd:rgba(248,113,113,0.35);
+      --amb:#fbbf24; --amb-dim:rgba(251,191,36,0.14); --amb-brd:rgba(251,191,36,0.35);
+      --blu:#60a5fa; --blu-dim:rgba(96,165,250,0.14); --blu-brd:rgba(96,165,250,0.35);
+      --slt:#94a3b8; --slt-dim:rgba(148,163,184,0.14); --slt-brd:rgba(148,163,184,0.35);
+      --grn:#4ade80; --grn-dim:rgba(74,222,128,0.14); --grn-brd:rgba(74,222,128,0.35);
+    }
+    [data-theme="light"] {
+      --bg0:#f1f5f9; --bg1:#ffffff; --bg2:#f8fafc; --bg3:#e2e8f0;
+      --t1:#0f172a; --t2:#334155; --t3:#64748b; --t4:#94a3b8;
+      --brd:rgba(0,0,0,0.08); --brd2:rgba(0,0,0,0.04);
+      --acc:#2563eb; --acc-dim:rgba(37,99,235,0.1);
+      --red:#dc2626; --red-dim:rgba(220,38,38,0.1); --red-brd:rgba(220,38,38,0.3);
+      --amb:#d97706; --amb-dim:rgba(217,119,6,0.1); --amb-brd:rgba(217,119,6,0.3);
+      --blu:#2563eb; --blu-dim:rgba(37,99,235,0.1); --blu-brd:rgba(37,99,235,0.3);
+      --slt:#64748b; --slt-dim:rgba(100,116,139,0.1); --slt-brd:rgba(100,116,139,0.3);
+      --grn:#16a34a; --grn-dim:rgba(22,163,74,0.1); --grn-brd:rgba(22,163,74,0.3);
+    }
+    html, body { height:100%; background:var(--bg0); }
+    ::-webkit-scrollbar { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--bg3); border-radius:3px; }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+    @keyframes slideDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes slideRight { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+    input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;background:var(--bg3);outline:none;cursor:pointer;width:100%;}
+    input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--acc);cursor:pointer;}
+    input::placeholder{color:var(--t4);}
+  </style>
+</helmet>
+
+<div data-theme="{{ theme }}" style="min-height:100vh;background:var(--bg0);color:var(--t1);font-family:'IBM Plex Sans',sans-serif;display:flex;flex-direction:column;">
+
+  <!-- ═══ NAV ═══ -->
+  <nav style="background:var(--bg1);border-bottom:1px solid var(--brd);height:52px;display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:200;flex-shrink:0;">
+    <div style="width:28px;height:28px;border-radius:6px;background:var(--acc);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" fill="white"/><rect x="8" y="1" width="5" height="5" rx="1" fill="white" opacity=".65"/><rect x="1" y="8" width="5" height="5" rx="1" fill="white" opacity=".65"/><rect x="8" y="8" width="5" height="5" rx="1" fill="white" opacity=".4"/></svg>
+    </div>
+    <div style="line-height:1.2;">
+      <div style="font-size:13px;font-weight:600;color:var(--t1);">Mediaocean</div>
+      <div style="font-size:10px;color:var(--t4);letter-spacing:0.02em;">Regression Classification Report Portal</div>
+    </div>
+    <div style="flex:1;"></div>
+    <button onClick="{{ toggleTheme }}" style="width:34px;height:34px;border-radius:7px;border:1px solid var(--brd);background:transparent;color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--bg3);color:var(--t1);">
+      <sc-if value="{{ isDark }}" hint-placeholder-val="{{ true }}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </sc-if>
+      <sc-if value="{{ isLight }}" hint-placeholder-val="{{ false }}">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </sc-if>
+    </button>
+  </nav>
+
+  <!-- ═══ VIEW 1: LAUNCHES ═══ -->
+  <sc-if value="{{ isLaunches }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;padding:24px;overflow-y:auto;animation:fadeIn 0.2s ease;">
+
+      <div style="margin-bottom:20px;">
+        <h1 style="font-size:20px;font-weight:600;letter-spacing:-0.02em;">Regression Runs</h1>
+        <p style="font-size:13px;color:var(--t3);margin-top:4px;">AI-classified failure analysis per build. Click a row to drill into individual test cases.</p>
+      </div>
+
+      <!-- Taxonomy legend -->
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding:10px 16px;background:var(--bg1);border:1px solid var(--brd);border-radius:8px;flex-wrap:wrap;">
+        <span style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;">Failure Taxonomy</span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t2);"><span style="width:8px;height:8px;border-radius:50%;background:var(--red);flex-shrink:0;"></span>Product Bug <span style="color:var(--t4);font-size:10px;font-family:'IBM Plex Mono',monospace;">APP-ISSUE · APP-CHANGE</span></span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t2);"><span style="width:8px;height:8px;border-radius:50%;background:var(--amb);flex-shrink:0;"></span>Auto Bug <span style="color:var(--t4);font-size:10px;font-family:'IBM Plex Mono',monospace;">DATA-ISSUE · SCRIPT-ISSUE</span></span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t2);"><span style="width:8px;height:8px;border-radius:50%;background:var(--blu);flex-shrink:0;"></span>System Issue <span style="color:var(--t4);font-size:10px;font-family:'IBM Plex Mono',monospace;">PERF-ISSUE · SYNC-ISSUE</span></span>
+        <span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t2);"><span style="width:8px;height:8px;border-radius:50%;background:var(--slt);flex-shrink:0;"></span>To Investigate <span style="color:var(--t4);font-size:10px;font-family:'IBM Plex Mono',monospace;">YET-TO-ANALYZE</span></span>
+      </div>
+
+      <!-- Builds table -->
+      <div style="background:var(--bg1);border:1px solid var(--brd);border-radius:10px;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:minmax(220px,1fr) 155px 200px 90px 130px;padding:0 20px;background:var(--bg2);border-bottom:1px solid var(--brd);">
+          <div style="padding:10px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">Build / EXEC_ID</div>
+          <div style="padding:10px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">Started</div>
+          <div style="padding:10px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">Results</div>
+          <div style="padding:10px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">Breakdown</div>
+          <div style="padding:10px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">Review Needed</div>
+        </div>
+        <sc-for list="{{ builds }}" as="build" hint-placeholder-count="4">
+          <div onClick="{{ build.onClick }}" style="display:grid;grid-template-columns:minmax(220px,1fr) 155px 200px 90px 130px;padding:0 20px;border-bottom:1px solid var(--brd2);cursor:pointer;transition:background 0.1s;align-items:center;min-height:68px;" style-hover="background:var(--bg2);">
+            <div style="padding:14px 0;">
+              <div style="font-size:14px;font-weight:500;color:var(--t1);">{{ build.name }}</div>
+              <div style="font-size:11px;color:var(--t4);font-family:'IBM Plex Mono',monospace;margin-top:3px;">{{ build.id }}</div>
+            </div>
+            <div style="font-size:12px;color:var(--t3);">{{ build.date }}</div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <span style="font-size:13px;color:var(--t3);">{{ build.total }}</span>
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--grn);">
+                <svg width="7" height="7" viewBox="0 0 7 7"><circle cx="3.5" cy="3.5" r="3.5" fill="currentColor"/></svg>{{ build.passed }}
+              </span>
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--red);">
+                <svg width="7" height="7" viewBox="0 0 7 7"><circle cx="3.5" cy="3.5" r="3.5" fill="currentColor"/></svg>{{ build.failed }}
+              </span>
+            </div>
+            <!-- Donut with hover tooltip -->
+            <div style="position:relative;display:inline-flex;align-items:center;" onMouseEnter="{{ build.onEnterDonut }}" onMouseLeave="{{ build.onLeaveDonut }}">
+              <div style="width:36px;height:36px;border-radius:50%;background:{{ build.donut }};position:relative;cursor:default;">
+                <div style="position:absolute;inset:8px;border-radius:50%;background:var(--bg1);"></div>
+              </div>
+              <sc-if value="{{ build.showTip }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:50%;transform:translateX(-50%);bottom:calc(100% + 8px);background:var(--bg1);border:1px solid var(--brd);border-radius:10px;padding:14px;width:200px;z-index:400;box-shadow:0 16px 40px rgba(0,0,0,0.5);animation:slideDown 0.12s ease;">
+                  <div style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Failure Breakdown</div>
+                  <div style="display:flex;flex-direction:column;gap:7px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);"><span style="width:7px;height:7px;border-radius:50%;background:var(--red);"></span>Product Bug</span><span style="font-size:12px;font-weight:600;color:var(--red);">{{ build.cats.product }}</span></div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);"><span style="width:7px;height:7px;border-radius:50%;background:var(--amb);"></span>Auto Bug</span><span style="font-size:12px;font-weight:600;color:var(--amb);">{{ build.cats.auto }}</span></div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);"><span style="width:7px;height:7px;border-radius:50%;background:var(--blu);"></span>System Issue</span><span style="font-size:12px;font-weight:600;color:var(--blu);">{{ build.cats.system }}</span></div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;"><span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);"><span style="width:7px;height:7px;border-radius:50%;background:var(--slt);"></span>To Investigate</span><span style="font-size:12px;font-weight:600;color:var(--slt);">{{ build.cats.investigate }}</span></div>
+                  </div>
+                  <div style="margin-top:10px;height:5px;border-radius:3px;overflow:hidden;display:flex;">
+                    <div style="flex:{{ build.cats.product }};background:var(--red);"></div>
+                    <div style="flex:{{ build.cats.auto }};background:var(--amb);"></div>
+                    <div style="flex:{{ build.cats.system }};background:var(--blu);"></div>
+                    <div style="flex:{{ build.cats.investigate }};background:var(--slt);"></div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+            <div>
+              <span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:var(--amb-dim);border:1px solid var(--amb-brd);font-size:11px;font-weight:600;color:var(--amb);">
+                <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M5 1 6.18 3.7H9L6.6 5.3l.9 2.75L5 6.5 2.5 8.05l.9-2.75L1 3.7h2.82Z"/></svg>
+                {{ build.reviewNeeded }} flagged
+              </span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ═══ VIEW 2: TEST CASES ═══ -->
+  <sc-if value="{{ isTestcases }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;animation:fadeIn 0.2s ease;">
+
+      <!-- Build header -->
+      <div style="background:var(--bg1);border-bottom:1px solid var(--brd);padding:12px 20px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <button onClick="{{ onBack }}" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;border:1px solid var(--brd);background:transparent;color:var(--t3);cursor:pointer;font-size:12px;font-family:'IBM Plex Sans',sans-serif;" style-hover="background:var(--bg3);color:var(--t1);">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 2 3.5 6l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            All Runs
+          </button>
+          <span style="color:var(--brd);font-size:18px;line-height:1;">|</span>
+          <div>
+            <div style="font-size:15px;font-weight:600;color:var(--t1);">{{ selBuild.name }}</div>
+            <div style="font-size:11px;color:var(--t4);font-family:'IBM Plex Mono',monospace;margin-top:1px;">{{ selBuild.id }} · {{ selBuild.date }}</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="display:flex;align-items:center;gap:16px;">
+            <div style="text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--t1);line-height:1;">{{ selBuild.total }}</div><div style="font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:0.07em;margin-top:2px;">Total</div></div>
+            <div style="text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--grn);line-height:1;">{{ selBuild.passed }}</div><div style="font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:0.07em;margin-top:2px;">Passed</div></div>
+            <div style="text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--red);line-height:1;">{{ selBuild.failed }}</div><div style="font-size:9px;color:var(--t4);text-transform:uppercase;letter-spacing:0.07em;margin-top:2px;">Failed</div></div>
+            <div style="width:40px;height:40px;border-radius:50%;background:{{ summaryDonut }};position:relative;flex-shrink:0;">
+              <div style="position:absolute;inset:9px;border-radius:50%;background:var(--bg1);"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Content row -->
+      <div style="flex:1;display:flex;overflow:hidden;">
+
+        <!-- ─── SIDEBAR ─── -->
+        <sc-if value="{{ sidebarOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="width:248px;flex-shrink:0;background:var(--bg1);border-right:1px solid var(--brd);overflow-y:auto;animation:slideRight 0.15s ease;">
+            <div style="padding:16px;display:flex;flex-direction:column;gap:18px;">
+
+              <!-- Search -->
+              <div>
+                <div style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;">Search</div>
+                <div style="position:relative;">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--t4);"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  <input type="text" value="{{ filters.search }}" onChange="{{ onSearch }}" placeholder="TC_ID or test name…" style="padding-left:28px;width:100%;background:var(--bg3);color:var(--t1);border:1px solid var(--brd);border-radius:6px;font-size:12px;font-family:'IBM Plex Sans',sans-serif;height:32px;outline:none;"/>
+                </div>
+              </div>
+
+              <!-- Flagged toggle -->
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:12px;color:var(--t2);">Flagged only</span>
+                <div onClick="{{ onFlaggedToggle }}" style="width:38px;height:21px;border-radius:11px;background:{{ flagBg }};position:relative;cursor:pointer;transition:background 0.2s;border:1px solid var(--brd);">
+                  <div style="position:absolute;top:3px;left:{{ flagThumb }};width:13px;height:13px;border-radius:50%;background:white;transition:left 0.18s;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>
+                </div>
+              </div>
+
+              <div style="height:1px;background:var(--brd);"></div>
+
+              <!-- Category -->
+              <div>
+                <div style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;">Category</div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <sc-for list="{{ catBtns }}" as="cb" hint-placeholder-count="4">
+                    <button onClick="{{ cb.toggle }}" style="display:flex;align-items:center;gap:7px;width:100%;padding:7px 10px;border-radius:6px;border:1px solid {{ cb.border }};background:{{ cb.bg }};cursor:pointer;font-family:'IBM Plex Sans',sans-serif;text-align:left;" style-hover="opacity:0.85;">
+                      <span style="width:7px;height:7px;border-radius:50%;background:{{ cb.color }};flex-shrink:0;"></span>
+                      <span style="font-size:12px;color:{{ cb.color }};font-weight:{{ cb.fw }};flex:1;">{{ cb.label }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- Root Cause -->
+              <div>
+                <div style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;">Root Cause</div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  <sc-for list="{{ rcBtns }}" as="rb" hint-placeholder-count="7">
+                    <button onClick="{{ rb.toggle }}" style="display:flex;align-items:center;gap:7px;width:100%;padding:6px 10px;border-radius:6px;border:1px solid {{ rb.border }};background:{{ rb.bg }};cursor:pointer;font-family:'IBM Plex Mono',sans-serif;text-align:left;" style-hover="opacity:0.85;">
+                      <span style="font-size:11px;font-weight:500;color:{{ rb.color }};letter-spacing:0.02em;">{{ rb.label }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="height:1px;background:var(--brd);"></div>
+
+              <!-- Module -->
+              <div>
+                <div style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;">Module</div>
+                <select value="{{ filters.module }}" onChange="{{ onModuleChange }}" style="width:100%;background:var(--bg3);color:var(--t1);border:1px solid var(--brd);border-radius:6px;padding:6px 10px;font-size:12px;font-family:'IBM Plex Sans',sans-serif;outline:none;cursor:pointer;">
+                  <sc-for list="{{ modules }}" as="mod" hint-placeholder-count="5">
+                    <option value="{{ mod.v }}">{{ mod.l }}</option>
+                  </sc-for>
+                </select>
+              </div>
+
+              <!-- Confidence range -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                  <div style="font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">Confidence</div>
+                  <span style="font-size:11px;color:var(--t3);font-family:'IBM Plex Mono',monospace;">{{ confMin }}%–{{ confMax }}%</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <input type="range" min="0" max="100" value="{{ confMin }}" onChange="{{ onConfMinChange }}"/>
+                  <input type="range" min="0" max="100" value="{{ confMax }}" onChange="{{ onConfMaxChange }}"/>
+                </div>
+              </div>
+
+              <!-- Clear -->
+              <button onClick="{{ clearFilters }}" style="padding:7px 12px;border-radius:6px;border:1px solid var(--brd);background:transparent;color:var(--t3);cursor:pointer;font-size:12px;font-family:'IBM Plex Sans',sans-serif;text-align:center;" style-hover="background:var(--bg3);color:var(--t1);">
+                Clear all filters
+              </button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ─── MAIN AREA ─── -->
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0;">
+
+          <!-- Toolbar -->
+          <div style="padding:8px 14px;background:var(--bg1);border-bottom:1px solid var(--brd);display:flex;align-items:center;gap:10px;flex-shrink:0;">
+            <button onClick="{{ toggleSidebar }}" style="display:inline-flex;align-items:center;gap:5px;padding:5px 9px;border-radius:6px;border:1px solid var(--brd);background:var(--bg2);color:var(--t3);cursor:pointer;font-size:11px;font-family:'IBM Plex Sans',sans-serif;" style-hover="color:var(--t1);">
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="0.5" y="0.5" width="12" height="12" rx="2" stroke="currentColor"/><path d="M4.5 0.5v12" stroke="currentColor" stroke-width="1"/></svg>
+              <sc-if value="{{ sidebarOpen }}" hint-placeholder-val="{{ true }}">Hide</sc-if>
+              <sc-if value="{{ sidebarClosed }}" hint-placeholder-val="{{ false }}">Filters</sc-if>
+            </button>
+            <sc-if value="{{ hasFilters }}" hint-placeholder-val="{{ false }}">
+              <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;background:var(--acc-dim);border:1px solid var(--acc);font-size:11px;color:var(--acc);">{{ filterText }}</span>
+            </sc-if>
+            <div style="flex:1;"></div>
+            <span style="font-size:12px;color:var(--t4);">{{ filteredCount }} of {{ totalCount }} failures</span>
+          </div>
+
+          <!-- Table scroll container -->
+          <div style="flex:1;overflow:auto;">
+            <!-- Sticky header -->
+            <div style="display:grid;grid-template-columns:90px 1fr 105px 85px 130px 118px 125px 90px 34px 34px;padding:0 14px;background:var(--bg2);border-bottom:1px solid var(--brd);position:sticky;top:0;z-index:10;min-width:920px;">
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">TC ID</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Test Name</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Module</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Status</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Category</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Root Cause</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Confidence</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;">Decision</div>
+              <div style="padding:9px 0;font-size:10px;font-weight:600;color:var(--t4);letter-spacing:0.07em;text-transform:uppercase;text-align:center;">⚑</div>
+              <div></div>
+            </div>
+
+            <!-- Rows -->
+            <div style="min-width:920px;">
+              <sc-for list="{{ testCases }}" as="tc" hint-placeholder-count="5">
+
+                <!-- TC row -->
+                <div onClick="{{ tc.onToggle }}" style="display:grid;grid-template-columns:90px 1fr 105px 85px 130px 118px 125px 90px 34px 34px;padding:0 14px;border-bottom:1px solid var(--brd2);cursor:pointer;transition:background 0.1s;align-items:center;min-height:54px;" style-hover="background:var(--bg2);">
+                  <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--acc);font-weight:500;padding-right:8px;">{{ tc.id }}</div>
+                  <div style="padding-right:14px;">
+                    <div style="font-size:12px;font-weight:500;color:var(--t1);line-height:1.4;text-wrap:pretty;">{{ tc.name }}</div>
+                    <div style="font-size:11px;color:var(--t4);margin-top:2px;">{{ tc.component }}</div>
+                  </div>
+                  <div style="font-size:11px;color:var(--t3);padding-right:8px;">{{ tc.module }}</div>
+                  <div><span style="font-size:10px;font-weight:700;letter-spacing:0.05em;padding:3px 6px;border-radius:4px;background:var(--red-dim);color:var(--red);border:1px solid var(--red-brd);">{{ tc.status }}</span></div>
+                  <div><span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:5px;background:{{ tc.catDim }};color:{{ tc.catColor }};border:1px solid {{ tc.catBrd }};white-space:nowrap;max-width:124px;"><span style="width:6px;height:6px;border-radius:50%;background:{{ tc.catColor }};flex-shrink:0;"></span>{{ tc.catLabel }}</span></div>
+                  <div><span style="font-size:10px;font-weight:700;letter-spacing:0.04em;padding:3px 6px;border-radius:4px;background:{{ tc.catDim }};color:{{ tc.catColor }};font-family:'IBM Plex Mono',monospace;border:1px solid {{ tc.catBrd }};">{{ tc.rootCause }}</span></div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <div style="width:58px;height:4px;border-radius:2px;background:var(--bg3);flex-shrink:0;overflow:hidden;"><div style="width:{{ tc.confW }};height:100%;background:{{ tc.confColor }};border-radius:2px;"></div></div>
+                    <span style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:{{ tc.confColor }};font-weight:600;">{{ tc.confidence }}%</span>
+                  </div>
+                  <div><span style="font-size:10px;font-weight:700;letter-spacing:0.05em;padding:3px 7px;border-radius:4px;background:{{ tc.decBg }};color:{{ tc.decColor }};border:1px solid {{ tc.decBrd }};">{{ tc.decision }}</span></div>
+                  <div style="display:flex;align-items:center;justify-content:center;">
+                    <sc-if value="{{ tc.flagged }}" hint-placeholder-val="{{ false }}">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="var(--amb)"><path d="M2 1v10M2 1h8L8 5l2 4H2"/></svg>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:center;color:var(--t4);">
+                    <sc-if value="{{ tc.isExpanded }}" hint-placeholder-val="{{ false }}">
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </sc-if>
+                    <sc-if value="{{ tc.isCollapsed }}" hint-placeholder-val="{{ true }}">
+                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 8l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </sc-if>
+                  </div>
+                </div>
+
+                <!-- Expanded detail -->
+                <sc-if value="{{ tc.isExpanded }}" hint-placeholder-val="{{ false }}">
+                  <div style="background:var(--bg2);border-bottom:2px solid var(--brd);padding:20px 20px 20px 24px;animation:fadeIn 0.15s ease;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:18px;">
+
+                      <!-- Left: remarks + reasoning -->
+                      <div style="display:flex;flex-direction:column;gap:14px;">
+                        <div>
+                          <div style="font-size:10px;font-weight:700;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;">Failure Remarks</div>
+                          <div style="background:var(--bg0);border:1px solid var(--brd);border-radius:7px;padding:12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--t2);line-height:1.65;white-space:pre-wrap;max-height:110px;overflow-y:auto;word-break:break-word;">{{ tc.remarks }}</div>
+                        </div>
+                        <div>
+                          <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px;">
+                            <div style="font-size:10px;font-weight:700;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;">AI Reasoning</div>
+                            <span style="font-size:9px;padding:2px 5px;border-radius:3px;background:var(--acc-dim);color:var(--acc);font-weight:700;letter-spacing:0.05em;">AI</span>
+                          </div>
+                          <div style="background:var(--bg0);border:1px solid var(--brd);border-left:3px solid var(--acc);border-radius:7px;padding:12px;font-size:12px;color:var(--t2);line-height:1.65;">{{ tc.reasoning }}</div>
+                        </div>
+                      </div>
+
+                      <!-- Right: similar failures -->
+                      <div>
+                        <div style="font-size:10px;font-weight:700;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:7px;">Top Similar Past Failures</div>
+                        <div style="display:flex;flex-direction:column;gap:5px;">
+                          <sc-for list="{{ tc.similar }}" as="sf" hint-placeholder-count="3">
+                            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg0);border:1px solid var(--brd);border-radius:6px;">
+                              <span style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--acc);font-weight:500;flex-shrink:0;min-width:76px;">{{ sf.id }}</span>
+                              <span style="font-size:10px;font-weight:700;padding:2px 5px;border-radius:3px;background:{{ sf.lBg }};color:{{ sf.lColor }};font-family:'IBM Plex Mono',monospace;flex-shrink:0;">{{ sf.label }}</span>
+                              <div style="flex:1;height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;"><div style="width:{{ sf.scoreW }};height:100%;background:var(--acc);border-radius:2px;"></div></div>
+                              <span style="font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--t3);flex-shrink:0;">{{ sf.score }}%</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Action row -->
+                    <div style="border-top:1px solid var(--brd);padding-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                      <span style="font-size:11px;color:var(--t4);">Human review:</span>
+                      <button onClick="{{ tc.onApprove }}" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:6px;border:1px solid var(--grn-brd);background:{{ tc.approveBg }};color:var(--grn);cursor:pointer;font-size:12px;font-weight:600;font-family:'IBM Plex Sans',sans-serif;" style-hover="background:var(--grn-dim);">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Accept AI Label
+                      </button>
+                      <button onClick="{{ tc.onOpenPicker }}" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:6px;border:1px solid var(--brd);background:transparent;color:var(--t2);cursor:pointer;font-size:12px;font-weight:600;font-family:'IBM Plex Sans',sans-serif;" style-hover="background:var(--bg3);">
+                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M8.5 2 10 3.5 4 9.5H2.5V8L8.5 2Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        Override Label
+                      </button>
+                      <sc-if value="{{ tc.isReviewed }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-size:11px;color:var(--grn);display:inline-flex;align-items:center;gap:4px;">
+                          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                          Reviewed
+                        </span>
+                      </sc-if>
+                    </div>
+
+                    <!-- Override picker -->
+                    <sc-if value="{{ tc.showPicker }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:12px;padding:14px;background:var(--bg0);border:1px solid var(--brd);border-radius:8px;animation:slideDown 0.14s ease;">
+                        <div style="font-size:10px;font-weight:700;color:var(--t4);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px;">Select Correct Classification</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                          <sc-for list="{{ tc.overrideOpts }}" as="opt" hint-placeholder-count="7">
+                            <button onClick="{{ opt.onSelect }}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;border:1px solid {{ opt.brd }};background:{{ opt.bg }};cursor:pointer;font-size:11px;font-weight:500;font-family:'IBM Plex Sans',sans-serif;color:{{ opt.color }};" style-hover="opacity:0.85;">
+                              <span style="width:6px;height:6px;border-radius:50%;background:{{ opt.color }};flex-shrink:0;"></span>
+                              {{ opt.catLabel }}
+                              <span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:{{ opt.color }};opacity:0.75;">{{ opt.rc }}</span>
+                            </button>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    theme: 'dark',
+    view: 'launches',
+    selBuild: null,
+    expandedRow: null,
+    sidebarOpen: true,
+    donutTip: null,
+    overrides: {},
+    overridePicker: null,
+    filters: { categories: [], rootCauses: [], flaggedOnly: false, confMin: 0, confMax: 100, module: '', search: '' }
+  };
+
+  CAT = {
+    product:    { label:'Product Bug',   color:'var(--red)', dim:'var(--red-dim)', brd:'var(--red-brd)' },
+    auto:       { label:'Auto Bug',      color:'var(--amb)', dim:'var(--amb-dim)', brd:'var(--amb-brd)' },
+    system:     { label:'System Issue',  color:'var(--blu)', dim:'var(--blu-dim)', brd:'var(--blu-brd)' },
+    investigate:{ label:'To Investigate',color:'var(--slt)', dim:'var(--slt-dim)', brd:'var(--slt-brd)' }
+  };
+  RC_CAT = { 'APP-ISSUE':'product','APP-CHANGE':'product','DATA-ISSUE':'auto','SCRIPT-ISSUE':'auto','PERF-ISSUE':'system','SYNC-ISSUE':'system','YET-TO-ANALYZE':'investigate' };
+  ROOT_CAUSES = ['APP-ISSUE','APP-CHANGE','DATA-ISSUE','SCRIPT-ISSUE','PERF-ISSUE','SYNC-ISSUE','YET-TO-ANALYZE'];
+
+  BUILDS = [
+    { id:'EXEC-2025-0047', name:'Sprint 47 Regression',   date:'Jun 20, 2025  09:23', total:87,  passed:54, failed:33, cats:{ product:12,auto:8, system:7, investigate:6 }, reviewNeeded:8 },
+    { id:'EXEC-2025-0046', name:'Sprint 46 Regression',   date:'Jun 13, 2025  14:10', total:92,  passed:71, failed:21, cats:{ product:5, auto:9, system:4, investigate:3 }, reviewNeeded:5 },
+    { id:'EXEC-2025-0045', name:'Hotfix 2.4.1',           date:'Jun 10, 2025  11:45', total:44,  passed:38, failed:6,  cats:{ product:3, auto:1, system:2, investigate:0 }, reviewNeeded:2 },
+    { id:'EXEC-2025-0044', name:'Sprint 45 Regression',   date:'Jun  6, 2025  08:55', total:95,  passed:62, failed:33, cats:{ product:14,auto:10,system:5, investigate:4 }, reviewNeeded:11 },
+    { id:'EXEC-2025-0043', name:'Sprint 44 Regression',   date:'May 30, 2025  09:00', total:89,  passed:76, failed:13, cats:{ product:4, auto:6, system:2, investigate:1 }, reviewNeeded:3 },
+    { id:'EXEC-2025-0042', name:'Release 2.4.0',          date:'May 22, 2025  16:30', total:102, passed:88, failed:14, cats:{ product:6, auto:4, system:2, investigate:2 }, reviewNeeded:4 }
+  ];
+
+  TC_0047 = [
+    { id:'TC-4201', name:'Invoice creation — multi-currency support', module:'Billing', component:'InvoiceEngine', status:'FAILED', category:'product', rootCause:'APP-ISSUE', confidence:94, decision:'ACCEPT', flagged:false,
+      remarks:'AssertionError: Expected total 1,250.00 USD but received 1,250.00 EUR.\nCurrency code mismatch at InvoiceCalculator.java:342.\nStack: InvoiceCalculator.compute() → BillingService.processInvoice()',
+      reasoning:'APP-ISSUE: currency conversion regression in billing module. The currency mapping table introduced in build 2.3.9 applies the wrong code during multi-currency scenarios. 4 historical matches with identical stack traces. High confidence.',
+      similar:[{id:'TC-3891',label:'APP-ISSUE',score:96},{id:'TC-3654',label:'APP-ISSUE',score:91},{id:'TC-3421',label:'APP-CHANGE',score:87}] },
+    { id:'TC-4202', name:'Media plan budget allocation — channel row validation', module:'Media Planning', component:'BudgetAllocator', status:'FAILED', category:'auto', rootCause:'SCRIPT-ISSUE', confidence:88, decision:'ACCEPT', flagged:false,
+      remarks:'NoSuchElementException: Element [data-testid="budget-channel-row"] not found after 10 s wait.\nDOM shows element present but inaccessible to automation driver.',
+      reasoning:'SCRIPT-ISSUE: test locator is stale after a recent front-end async refactor. Product feature works correctly. Script needs updated explicit wait strategy.',
+      similar:[{id:'TC-3780',label:'SCRIPT-ISSUE',score:93},{id:'TC-3612',label:'SCRIPT-ISSUE',score:89},{id:'TC-3401',label:'DATA-ISSUE',score:74}] },
+    { id:'TC-4203', name:'Campaign metrics aggregation — weekly rollup timeout', module:'Analytics', component:'MetricsEngine', status:'FAILED', category:'system', rootCause:'PERF-ISSUE', confidence:79, decision:'REVIEW', flagged:true,
+      remarks:'TimeoutException: Query execution exceeded 30 s SLA. Actual: 47.2 s.\nAggregating 2.3M records across 14 channels. DB slow log: full table scan, no index hit.',
+      reasoning:'PERF-ISSUE: DB performance regression. Pattern appears across 3 consecutive regression runs suggesting progressive degradation. Flagged for infrastructure review.',
+      similar:[{id:'TC-3900',label:'PERF-ISSUE',score:88},{id:'TC-3711',label:'SYNC-ISSUE',score:76},{id:'TC-3498',label:'PERF-ISSUE',score:72}] },
+    { id:'TC-4204', name:'Ad server trafficking — direct-sold line item approval', module:'Ad Server', component:'TrafficManager', status:'FAILED', category:'product', rootCause:'APP-CHANGE', confidence:91, decision:'ACCEPT', flagged:false,
+      remarks:'AssertionError: Expected line item status "READY" got "PENDING_APPROVAL".\nauto_approve_direct_sold rule evaluated to false. Rule engine logs confirm rule was loaded.',
+      reasoning:'APP-CHANGE: approval rule modified in ticket MO-8821. Intentional behavior change — test expectations must be updated to reflect new approval flow.',
+      similar:[{id:'TC-3876',label:'APP-CHANGE',score:95},{id:'TC-3623',label:'APP-CHANGE',score:90},{id:'TC-3415',label:'APP-ISSUE',score:82}] },
+    { id:'TC-4205', name:'Attribution report — cross-media channel weighting NaN', module:'Reporting', component:'AttributionReporter', status:'FAILED', category:'investigate', rootCause:'YET-TO-ANALYZE', confidence:41, decision:'REVIEW', flagged:true,
+      remarks:'UnexpectedResultException: NaN for channel_weight on 3 of 12 channels.\nNon-deterministic — reproduced 2 of 5 reruns. No stack trace available.',
+      reasoning:'YET-TO-ANALYZE: non-deterministic NaN output with no stack trace and no historical match. Could be race condition or edge-case in attribution calc. Manual investigation by senior engineer required.',
+      similar:[{id:'TC-3744',label:'SYNC-ISSUE',score:52},{id:'TC-3489',label:'APP-ISSUE',score:48},{id:'TC-3287',label:'PERF-ISSUE',score:44}] },
+    { id:'TC-4206', name:'Audience segment synchronization — DMP integration', module:'Audience', component:'DMPConnector', status:'FAILED', category:'system', rootCause:'SYNC-ISSUE', confidence:86, decision:'ACCEPT', flagged:false,
+      remarks:'ConnectionException: DMP sync failed after 3 retries. HTTP 504 from DMP API.\n847 segments pending. Last successful sync: 4 hours prior.',
+      reasoning:'SYNC-ISSUE: external DMP endpoint was temporarily overloaded during test window. Infrastructure dependency failure, not a product code defect.',
+      similar:[{id:'TC-3915',label:'SYNC-ISSUE',score:94},{id:'TC-3688',label:'SYNC-ISSUE',score:90},{id:'TC-3466',label:'PERF-ISSUE',score:77}] },
+    { id:'TC-4207', name:'User permission validation — workspace admin RBAC', module:'Identity', component:'RBACEngine', status:'FAILED', category:'auto', rootCause:'DATA-ISSUE', confidence:83, decision:'REVIEW', flagged:true,
+      remarks:'AssertionError: qa_admin_test@mediaocean.com expected WORKSPACE_ADMIN, received STANDARD_USER.\nAdmin role not reapplied by seeding script after environment refresh.',
+      reasoning:'DATA-ISSUE: test user\'s admin permission was lost during env refresh. RBAC product code is functioning correctly. Seeding script must reapply roles post-refresh.',
+      similar:[{id:'TC-3801',label:'DATA-ISSUE',score:91},{id:'TC-3578',label:'DATA-ISSUE',score:85},{id:'TC-3366',label:'SCRIPT-ISSUE',score:72}] },
+    { id:'TC-4208', name:'Creative asset upload — HEVC H.265 video transcoding', module:'Creative', component:'AssetProcessor', status:'FAILED', category:'product', rootCause:'APP-ISSUE', confidence:96, decision:'ACCEPT', flagged:false,
+      remarks:'RuntimeException: Unsupported codec HEVC H.265.\nTranscoder only supports H.264. Failure is 100% reproducible with HEVC sources.',
+      reasoning:'APP-ISSUE: HEVC H.265 support was specified in Q1 2025 roadmap (MO-7421) but the transcoder was never updated. Deterministic failure with exact error message match across 3 historical instances.',
+      similar:[{id:'TC-3932',label:'APP-ISSUE',score:97},{id:'TC-3699',label:'APP-ISSUE',score:93},{id:'TC-3477',label:'APP-ISSUE',score:89}] },
+    { id:'TC-4209', name:'Programmatic bidding — floor price enforcement', module:'Programmatic', component:'BidEngine', status:'FAILED', category:'product', rootCause:'APP-ISSUE', confidence:87, decision:'ACCEPT', flagged:false,
+      remarks:'AssertionError: Bid $0.85 CPM accepted despite floor $1.20 CPM.\nRule FP-RULE-004 was loaded but evaluation returned null.',
+      reasoning:'APP-ISSUE: floor price rule evaluation has a logic defect. Sub-floor bid was accepted, which is a high-severity revenue protection failure.',
+      similar:[{id:'TC-3811',label:'APP-ISSUE',score:90},{id:'TC-3588',label:'APP-ISSUE',score:85},{id:'TC-3376',label:'APP-CHANGE',score:79}] },
+    { id:'TC-4210', name:'Email notifications — campaign launch alert delivery', module:'Notifications', component:'EmailService', status:'FAILED', category:'auto', rootCause:'SCRIPT-ISSUE', confidence:75, decision:'REVIEW', flagged:false,
+      remarks:'AssertionError: Email not received within 60 s timeout.\nSMTP logs: email dispatched (MSG-20250620-4410). IMAP sync delayed in CI environment.',
+      reasoning:'Likely SCRIPT-ISSUE: inbox polling timeout too aggressive for CI. Email was sent successfully. Moderate uncertainty — could also be delivery reliability issue.',
+      similar:[{id:'TC-3822',label:'SCRIPT-ISSUE',score:82},{id:'TC-3599',label:'SCRIPT-ISSUE',score:77},{id:'TC-3387',label:'SYNC-ISSUE',score:63}] },
+    { id:'TC-4211', name:'Data export — campaign CSV with custom date range', module:'Reporting', component:'DataExporter', status:'FAILED', category:'product', rootCause:'APP-CHANGE', confidence:89, decision:'ACCEPT', flagged:false,
+      remarks:'AssertionError: CSV header has 42 columns, expected 38.\nNew columns: viewability_pct, brand_safety_score, attention_score, content_score.',
+      reasoning:'APP-CHANGE: 4 new measurement columns added per MO-9102 (Attention Economy Metrics). Intentional schema change. Test validation needs updating.',
+      similar:[{id:'TC-3844',label:'APP-CHANGE',score:93},{id:'TC-3621',label:'APP-CHANGE',score:88},{id:'TC-3409',label:'APP-ISSUE',score:76}] },
+    { id:'TC-4212', name:'Inventory forecast — supply availability model accuracy', module:'Inventory', component:'ForecastEngine', status:'FAILED', category:'investigate', rootCause:'YET-TO-ANALYZE', confidence:55, decision:'REVIEW', flagged:true,
+      remarks:'AssertionError: Forecast accuracy dropped from 94% to 67%.\nNo code changes detected in ForecastEngine. ML model outputs differ significantly from baseline.',
+      reasoning:'YET-TO-ANALYZE: significant accuracy regression with no code changes. Possible ML model drift, training data corruption, or environmental change. Low confidence, manual investigation recommended.',
+      similar:[{id:'TC-3755',label:'YET-TO-ANALYZE',score:61},{id:'TC-3500',label:'PERF-ISSUE',score:55},{id:'TC-3298',label:'DATA-ISSUE',score:51}] },
+    { id:'TC-4213', name:'OAuth token refresh — session continuity validation', module:'Identity', component:'AuthService', status:'FAILED', category:'system', rootCause:'SYNC-ISSUE', confidence:82, decision:'ACCEPT', flagged:false,
+      remarks:'TokenExpiredException: OAuth refresh failed — HTTP 503 from token service.\nHealth check confirms token rotation service was restarting at 08:47:23 UTC.',
+      reasoning:'SYNC-ISSUE: test ran during auth service restart window. Transient infrastructure issue, not a product code defect. Timing correlation is conclusive.',
+      similar:[{id:'TC-3866',label:'SYNC-ISSUE',score:89},{id:'TC-3643',label:'SYNC-ISSUE',score:84},{id:'TC-3431',label:'PERF-ISSUE',score:71}] },
+    { id:'TC-4214', name:'Programmatic RTB — 10K RPS throughput load test', module:'Programmatic', component:'BidEngine', status:'FAILED', category:'system', rootCause:'PERF-ISSUE', confidence:92, decision:'ACCEPT', flagged:false,
+      remarks:'PerformanceException: Bid latency exceeded 100 ms SLA at 8,200 RPS.\nP99: 143 ms, P95: 112 ms. CPU at 94%, GC pauses contributing to spikes.',
+      reasoning:'PERF-ISSUE: bid engine cannot sustain 10K RPS without breaching latency SLA. GC pressure and CPU saturation are classic perf signatures. Appears in 4 of last 6 regression runs.',
+      similar:[{id:'TC-3888',label:'PERF-ISSUE',score:96},{id:'TC-3665',label:'PERF-ISSUE',score:92},{id:'TC-3453',label:'PERF-ISSUE',score:88}] },
+    { id:'TC-4215', name:'Contract management — MSA renewal workflow', module:'CRM', component:'ContractEngine', status:'FAILED', category:'auto', rootCause:'DATA-ISSUE', confidence:68, decision:'REVIEW', flagged:false,
+      remarks:'NullPointerException: contract.getRenewalDate() returned null.\nExpected: 2025-12-31. renewal_date field is NULL in DB. Seeding script may not have populated all fields.',
+      reasoning:'DATA-ISSUE (moderate confidence): null renewal date most likely from incomplete contract seeding. Possible the field is nullable under certain contract types — review recommended.',
+      similar:[{id:'TC-3833',label:'DATA-ISSUE',score:78},{id:'TC-3610',label:'DATA-ISSUE',score:73},{id:'TC-3398',label:'APP-ISSUE',score:63}] }
+  ];
+
+  POOL = {
+    product:[
+      {name:'Invoice total calculation mismatch',module:'Billing',comp:'InvoiceEngine',rc:'APP-ISSUE',conf:93},
+      {name:'Bid floor enforcement failure',module:'Programmatic',comp:'BidEngine',rc:'APP-ISSUE',conf:87},
+      {name:'Creative HEVC codec unsupported',module:'Creative',comp:'AssetProcessor',rc:'APP-ISSUE',conf:95},
+      {name:'Ad approval workflow state changed',module:'Ad Server',comp:'TrafficManager',rc:'APP-CHANGE',conf:91},
+      {name:'CSV export schema column addition',module:'Reporting',comp:'DataExporter',rc:'APP-CHANGE',conf:89},
+      {name:'Campaign budget pacing overspend',module:'Media Planning',comp:'PacingEngine',rc:'APP-ISSUE',conf:86},
+      {name:'Audience targeting filter regression',module:'Targeting',comp:'FilterEngine',rc:'APP-ISSUE',conf:90},
+      {name:'Contract renewal workflow state',module:'CRM',comp:'ContractEngine',rc:'APP-CHANGE',conf:87}
+    ],
+    auto:[
+      {name:'Budget channel row locator stale',module:'Media Planning',comp:'BudgetAllocator',rc:'SCRIPT-ISSUE',conf:88},
+      {name:'Test user RBAC permission reset',module:'Identity',comp:'RBACEngine',rc:'DATA-ISSUE',conf:83},
+      {name:'Email notification polling timeout',module:'Notifications',comp:'EmailService',rc:'SCRIPT-ISSUE',conf:75},
+      {name:'Contract date null — seeding gap',module:'CRM',comp:'ContractEngine',rc:'DATA-ISSUE',conf:68},
+      {name:'Audience segment selector stale',module:'Audience',comp:'SegmentSync',rc:'SCRIPT-ISSUE',conf:85},
+      {name:'Report scheduler data seed miss',module:'Reporting',comp:'Scheduler',rc:'DATA-ISSUE',conf:77}
+    ],
+    system:[
+      {name:'Analytics aggregation query timeout',module:'Analytics',comp:'MetricsEngine',rc:'PERF-ISSUE',conf:79},
+      {name:'DMP audience sync HTTP 504',module:'Audience',comp:'DMPConnector',rc:'SYNC-ISSUE',conf:86},
+      {name:'OAuth token service restart race',module:'Identity',comp:'AuthService',rc:'SYNC-ISSUE',conf:82},
+      {name:'Programmatic RTS throughput limit',module:'Programmatic',comp:'BidEngine',rc:'PERF-ISSUE',conf:92},
+      {name:'API gateway rate limit exceeded',module:'Ad Server',comp:'Gateway',rc:'PERF-ISSUE',conf:78}
+    ],
+    investigate:[
+      {name:'Attribution model NaN output',module:'Reporting',comp:'AttributionReporter',rc:'YET-TO-ANALYZE',conf:41},
+      {name:'Forecast model accuracy regression',module:'Inventory',comp:'ForecastEngine',rc:'YET-TO-ANALYZE',conf:55},
+      {name:'Creative rotation distribution anomaly',module:'Creative',comp:'RotationEngine',rc:'YET-TO-ANALYZE',conf:47}
+    ]
+  };
+
+  componentDidMount() {
+    this.allTCs = { 'EXEC-2025-0047': this.TC_0047 };
+    this.BUILDS.forEach((b, i) => {
+      if (b.id !== 'EXEC-2025-0047') {
+        this.allTCs[b.id] = this.genTCs(b.id, b.cats, i);
+      }
+    });
+  }
+
+  genTCs(buildId, cats, idx) {
+    const results = [];
+    const sh = buildId.slice(-4);
+    const offset = idx * 3;
+    const getDecision = c => c >= 85 ? 'ACCEPT' : c >= 60 ? 'REVIEW' : 'REJECT';
+    const jitter = (i) => ((idx * 7 + i * 13) % 9) - 4;
+    ['product','auto','system','investigate'].forEach(cat => {
+      const pool = this.POOL[cat];
+      const count = Math.min(cats[cat], pool.length);
+      for (let i = 0; i < count; i++) {
+        const t = pool[(i + offset) % pool.length];
+        const conf = Math.min(99, Math.max(38, t.conf + jitter(i)));
+        results.push({
+          id: `TC-${sh}-${String(results.length + 1).padStart(2,'0')}`,
+          name: t.name,
+          module: t.module,
+          component: t.comp,
+          status: 'FAILED',
+          category: cat,
+          rootCause: t.rc,
+          confidence: conf,
+          decision: getDecision(conf),
+          flagged: cat === 'investigate' || (conf < 65 && i % 2 === 0),
+          remarks: `Automated test failure in ${t.module} module.\nError type: ${t.rc}. See CI logs for build ${buildId}.`,
+          reasoning: `Classified as ${t.rc} based on error pattern matching against historical failures in ${t.module}. Confidence level: ${conf >= 85 ? 'high' : conf >= 60 ? 'moderate' : 'low'}.`,
+          similar: [
+            { id: `TC-${sh}S${i}a`, label: t.rc, score: Math.min(99, conf + 3) },
+            { id: `TC-${sh}S${i}b`, label: t.rc, score: Math.min(99, conf - 6) },
+            { id: `TC-${sh}S${i}c`, label: cat === 'product' ? 'APP-CHANGE' : t.rc, score: Math.max(45, conf - 14) }
+          ]
+        });
+      }
+    });
+    return results;
+  }
+
+  donut(cats) {
+    const t = cats.product + cats.auto + cats.system + cats.investigate;
+    if (!t) return '#374151';
+    const p = (cats.product / t * 100).toFixed(1);
+    const a = ((cats.product + cats.auto) / t * 100).toFixed(1);
+    const s = ((cats.product + cats.auto + cats.system) / t * 100).toFixed(1);
+    return `conic-gradient(#f87171 0% ${p}%, #fbbf24 ${p}% ${a}%, #60a5fa ${a}% ${s}%, #94a3b8 ${s}% 100%)`;
+  }
+
+  confColors(c) {
+    if (c >= 85) return { color:'var(--grn)', bg:'var(--grn-dim)', brd:'var(--grn-brd)' };
+    if (c >= 60) return { color:'var(--amb)', bg:'var(--amb-dim)', brd:'var(--amb-brd)' };
+    return { color:'var(--red)', bg:'var(--red-dim)', brd:'var(--red-brd)' };
+  }
+
+  decColors(d) {
+    if (d === 'ACCEPT') return { color:'var(--grn)', bg:'var(--grn-dim)', brd:'var(--grn-brd)' };
+    if (d === 'REJECT') return { color:'var(--red)', bg:'var(--red-dim)', brd:'var(--red-brd)' };
+    return { color:'var(--amb)', bg:'var(--amb-dim)', brd:'var(--amb-brd)' };
+  }
+
+  filterTCs(tcs, f) {
+    return tcs.filter(tc => {
+      if (f.categories.length && !f.categories.includes(tc.category)) return false;
+      if (f.rootCauses.length && !f.rootCauses.includes(tc.rootCause)) return false;
+      if (f.flaggedOnly && !tc.flagged) return false;
+      if (tc.confidence < f.confMin || tc.confidence > f.confMax) return false;
+      if (f.module && tc.module !== f.module) return false;
+      if (f.search) {
+        const s = f.search.toLowerCase();
+        if (!tc.id.toLowerCase().includes(s) && !tc.name.toLowerCase().includes(s)) return false;
+      }
+      return true;
+    });
+  }
+
+  toggleCat(cat) {
+    this.setState(s => {
+      const cats = s.filters.categories;
+      return { filters: { ...s.filters, categories: cats.includes(cat) ? cats.filter(c => c !== cat) : [...cats, cat] } };
+    });
+  }
+
+  toggleRC(rc) {
+    this.setState(s => {
+      const rcs = s.filters.rootCauses;
+      return { filters: { ...s.filters, rootCauses: rcs.includes(rc) ? rcs.filter(r => r !== rc) : [...rcs, rc] } };
+    });
+  }
+
+  applyOverride(tcId, cat, rc) {
+    this.setState(s => ({
+      overrides: { ...s.overrides, [tcId]: { category: cat, rootCause: rc, decision: 'REJECT', reviewed: true } },
+      overridePicker: null
+    }));
+  }
+
+  renderVals() {
+    const { theme, view, selBuild, expandedRow, sidebarOpen, donutTip, filters, overrides, overridePicker } = this.state;
+    const isDark = theme === 'dark';
+    const isLight = !isDark;
+    const unselBrd = isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.08)';
+
+    const builds = this.BUILDS.map(b => ({
+      ...b,
+      donut: this.donut(b.cats),
+      showTip: donutTip === b.id,
+      onEnterDonut: (e) => { e.stopPropagation(); this.setState({ donutTip: b.id }); },
+      onLeaveDonut: () => this.setState({ donutTip: null }),
+      onClick: () => this.setState({ view:'testcases', selBuild: b, expandedRow: null, overridePicker: null })
+    }));
+
+    const allTCs = selBuild ? ((this.allTCs || {})[selBuild.id] || []) : [];
+    const filtered = this.filterTCs(allTCs, filters);
+
+    const testCases = filtered.map(tc => {
+      const ov = overrides[tc.id] || {};
+      const cat = ov.category || tc.category;
+      const rc = ov.rootCause || tc.rootCause;
+      const dec = ov.decision || tc.decision;
+      const catCfg = this.CAT[cat] || this.CAT.investigate;
+      const cc = this.confColors(tc.confidence);
+      const dc = this.decColors(dec);
+      const isExpanded = expandedRow === tc.id;
+      const isReviewed = !!(ov.reviewed || ov.decision);
+
+      const overrideOpts = this.ROOT_CAUSES.map(optRc => {
+        const optCat = this.RC_CAT[optRc];
+        const cfg = this.CAT[optCat];
+        return { catLabel: cfg.label, rc: optRc, color: cfg.color, bg: cfg.dim, brd: cfg.brd, onSelect: () => this.applyOverride(tc.id, optCat, optRc) };
+      });
+
+      const similar = (tc.similar || []).map(sf => {
+        const sfCat = this.RC_CAT[sf.label] || 'investigate';
+        const sfCfg = this.CAT[sfCat];
+        return { ...sf, lColor: sfCfg.color, lBg: sfCfg.dim, scoreW: sf.score + '%' };
+      });
+
+      return {
+        ...tc, category: cat, rootCause: rc, decision: dec,
+        catLabel: catCfg.label, catColor: catCfg.color, catDim: catCfg.dim, catBrd: catCfg.brd,
+        confColor: cc.color, confW: tc.confidence + '%',
+        decColor: dc.color, decBg: dc.bg, decBrd: dc.brd,
+        isExpanded, isCollapsed: !isExpanded, isReviewed,
+        approveBg: (isReviewed && dec === 'ACCEPT') ? 'var(--grn-dim)' : 'transparent',
+        showPicker: overridePicker === tc.id,
+        similar, overrideOpts,
+        onToggle: () => this.setState(s => ({ expandedRow: s.expandedRow === tc.id ? null : tc.id })),
+        onApprove: () => this.setState(s => ({ overrides: { ...s.overrides, [tc.id]: { ...(s.overrides[tc.id] || {}), decision:'ACCEPT', reviewed:true } } })),
+        onOpenPicker: () => this.setState(s => ({ overridePicker: s.overridePicker === tc.id ? null : tc.id }))
+      };
+    });
+
+    const catBtns = Object.entries(this.CAT).map(([cat, cfg]) => {
+      const sel = filters.categories.includes(cat);
+      return { label: cfg.label, color: cfg.color, bg: sel ? cfg.dim : 'transparent', border: sel ? cfg.brd : unselBrd, fw: sel ? '600' : '400', toggle: () => this.toggleCat(cat) };
+    });
+
+    const rcBtns = this.ROOT_CAUSES.map(rc => {
+      const cfg = this.CAT[this.RC_CAT[rc]];
+      const sel = filters.rootCauses.includes(rc);
+      return { label: rc, color: cfg.color, bg: sel ? cfg.dim : 'transparent', border: sel ? cfg.brd : unselBrd, toggle: () => this.toggleRC(rc) };
+    });
+
+    const moduleSet = new Set(allTCs.map(tc => tc.module));
+    const modules = [{ v:'', l:'All Modules' }, ...Array.from(moduleSet).sort().map(m => ({ v:m, l:m }))];
+
+    const activeCount = (filters.categories.length > 0 ? 1 : 0) + (filters.rootCauses.length > 0 ? 1 : 0) +
+      (filters.flaggedOnly ? 1 : 0) + (filters.confMin > 0 || filters.confMax < 100 ? 1 : 0) +
+      (filters.module ? 1 : 0) + (filters.search ? 1 : 0);
+
+    const summaryDonut = selBuild ? this.donut(selBuild.cats) : '';
+    const flagBg = filters.flaggedOnly ? (isDark ? '#4f8ef7' : '#2563eb') : (isDark ? '#2d3a4f' : '#d1d5db');
+    const flagThumb = filters.flaggedOnly ? '21px' : '3px';
+
+    return {
+      theme, isDark, isLight,
+      isLaunches: view === 'launches',
+      isTestcases: view === 'testcases',
+      builds, testCases, selBuild, summaryDonut,
+      catBtns, rcBtns, modules, filters,
+      confMin: filters.confMin, confMax: filters.confMax,
+      filteredCount: filtered.length, totalCount: allTCs.length,
+      sidebarOpen, sidebarClosed: !sidebarOpen,
+      flagBg, flagThumb,
+      hasFilters: activeCount > 0,
+      filterText: `${activeCount} filter${activeCount !== 1 ? 's' : ''} active`,
+      onBack: () => this.setState({ view:'launches', selBuild:null, expandedRow:null }),
+      toggleTheme: () => this.setState(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+      toggleSidebar: () => this.setState(s => ({ sidebarOpen: !s.sidebarOpen })),
+      onSearch: (e) => this.setState(s => ({ filters: { ...s.filters, search: e.target.value } })),
+      onFlaggedToggle: () => this.setState(s => ({ filters: { ...s.filters, flaggedOnly: !s.filters.flaggedOnly } })),
+      onConfMinChange: (e) => this.setState(s => ({ filters: { ...s.filters, confMin: +e.target.value } })),
+      onConfMaxChange: (e) => this.setState(s => ({ filters: { ...s.filters, confMax: +e.target.value } })),
+      onModuleChange: (e) => this.setState(s => ({ filters: { ...s.filters, module: e.target.value } })),
+      clearFilters: () => this.setState({ filters: { categories:[], rootCauses:[], flaggedOnly:false, confMin:0, confMax:100, module:'', search:'' } })
+    };
+  }
+}
+</script>
+</body>
+</html>
