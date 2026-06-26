@@ -38,7 +38,7 @@ import ollama
 import pandas as pd
 from pathlib import Path
 
-MODEL        = "llama3.1"
+MODEL        = "llama3.2:3b"
 HIGH_SIGNAL_THRESHOLD = 0.80   # similarity score above which neighbors are trusted
 
 VALID_LABELS = {
