@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from agents.ingestion_agent import IngestionAgent
 from agents.retriever_agent  import RetrieverAgent
 from agents.analyst_agent    import AnalystAgent
-from agents.decision_agent   import DecisionAgent
+from agents.decision_agent   import DecisionAgent, INTRIM_RULES, CATEGORY_MAP
 
 DB_PATH = Path(__file__).parent / "results" / "classifications.db"
 
@@ -42,6 +42,8 @@ def init_db(db_path: Path) -> sqlite3.Connection:
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             tc_id               TEXT,
             exec_id             TEXT,
+            jira_id             TEXT,
+            automated_tc_id     TEXT,
             intrim_status       TEXT,
             failure_remarks     TEXT,
             module              TEXT,
@@ -54,6 +56,8 @@ def init_db(db_path: Path) -> sqlite3.Connection:
             reasoning           TEXT,
             top_similarity      REAL,
             neighbor_labels     TEXT,
+            neighbor_ids        TEXT,
+            neighbor_scores     TEXT,
             classified_at       TEXT
         )
     """)
@@ -62,21 +66,28 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def save_result(conn: sqlite3.Connection, row, verdict: dict, neighbors):
-    top_sim       = float(neighbors["similarity_score"].max())
-    neighbor_lbls = ", ".join(neighbors["AUTO_FAILURE_REASON"].tolist())
+def save_result(conn: sqlite3.Connection, row, verdict: dict, neighbors=None):
+    if neighbors is not None and len(neighbors):
+        top_sim         = float(neighbors["similarity_score"].max())
+        neighbor_lbls   = ", ".join(neighbors["AUTO_FAILURE_REASON"].tolist())
+        neighbor_ids    = ", ".join(str(tc) for tc in neighbors["TC_ID"].tolist())
+        neighbor_scores = ", ".join(str(round(float(s), 4)) for s in neighbors["similarity_score"].tolist())
+    else:
+        top_sim, neighbor_lbls, neighbor_ids, neighbor_scores = 0.0, "", "", ""
 
     conn.execute("""
         INSERT INTO classifications (
-            tc_id, exec_id, intrim_status, failure_remarks, module, j_component,
+            tc_id, exec_id, jira_id, automated_tc_id, intrim_status, failure_remarks, module, j_component,
             category, final_label, confidence, decision, flag_for_human,
-            reasoning, top_similarity, neighbor_labels, classified_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            reasoning, top_similarity, neighbor_labels, neighbor_ids, neighbor_scores, classified_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        str(row.get("TC_ID",           "") or ""),
-        str(row.get("EXEC_ID",         "") or ""),
-        str(row.get("INTRIM_STATUS",   "") or ""),
-        str(row.get("FAILURE_REMARKS", "") or "")[:500],
+        str(row.get("TC_ID",             "") or ""),
+        str(row.get("EXEC_ID",           "") or ""),
+        str(row.get("JIRA_ID",           "") or ""),
+        str(row.get("AUTOMATED_TC_ID",   "") or ""),
+        str(row.get("INTRIM_STATUS",     "") or ""),
+        (lambda v: "" if not v or str(v).lower() == "nan" else str(v)[:500])(row.get("FAILURE_REMARKS")),
         str(row.get("MODULE",          "") or ""),
         str(row.get("J_COMPONENT",     "") or ""),
         verdict["category"],
@@ -87,6 +98,8 @@ def save_result(conn: sqlite3.Connection, row, verdict: dict, neighbors):
         verdict["reasoning"],
         top_sim,
         neighbor_lbls,
+        neighbor_ids,
+        neighbor_scores,
         datetime.now().isoformat(),
     ))
     conn.commit()
@@ -132,27 +145,36 @@ def run(n: int = 20, fresh: bool = False):
 
         print(f"[{i:>2}/{n}]  TC_ID: {tc_id:<8}  STATUS: {status:<15}", end="  ", flush=True)
 
-        # Step 1 — Retrieve
-        neighbors = retriever.query(row, top_k=5)
-        top_score = neighbors["similarity_score"].max()
+        remarks = str(row.get("FAILURE_REMARKS", "") or "").strip()
+        has_remarks = remarks and remarks.lower() != "nan"
 
-        # Step 2 — Analyse
-        analyst_result = analyst.analyze(row, neighbors)
-
-        # Step 3 — Decide
-        verdict = decision.decide(row, analyst_result)
-
-        # Step 4 — Save
-        save_result(conn, row, verdict, neighbors)
+        if not has_remarks and status.upper() in INTRIM_RULES:
+            # ── FAST PATH: no error text — apply domain rule directly, skip LLM ──
+            label = INTRIM_RULES[status.upper()]
+            verdict = {
+                "tc_id"         : tc_id,
+                "category"      : CATEGORY_MAP[label],
+                "final_label"   : label,
+                "confidence"    : 0.95,
+                "decision"      : "ACCEPT",
+                "reasoning"     : f"FAST-PATH: No FAILURE_REMARKS. INTRIM_STATUS={status} → {label} by domain rule.",
+                "flag_for_human": False,
+            }
+            save_result(conn, row, verdict, neighbors=None)
+            print(f"→ {label:<15}  conf: 0.95  [ACCEPT]  ⚡ fast-path  ({time.time()-t_row:.0f}s)")
+        else:
+            # ── FULL PATH: has error text — run retriever + LLM ──
+            neighbors = retriever.query(row, top_k=5)
+            analyst_result = analyst.analyze(row, neighbors)
+            verdict = decision.decide(row, analyst_result)
+            save_result(conn, row, verdict, neighbors)
+            print(f"→ {verdict['final_label']:<15}  conf: {verdict['confidence']:.2f}  "
+                  f"[{verdict['decision']}] {'⚑' if verdict['flag_for_human'] else ' '}  ({time.time()-t_row:.0f}s)")
 
         # Track stats
         results_summary[verdict["decision"]] = results_summary.get(verdict["decision"], 0) + 1
-        label = verdict["final_label"]
-        label_summary[label] = label_summary.get(label, 0) + 1
-
-        flag_icon = "⚑" if verdict["flag_for_human"] else " "
-        print(f"→ {verdict['final_label']:<15}  conf: {verdict['confidence']:.2f}  "
-              f"[{verdict['decision']}] {flag_icon}  ({time.time()-t_row:.0f}s)")
+        lbl = verdict["final_label"]
+        label_summary[lbl] = label_summary.get(lbl, 0) + 1
 
     conn.close()
 
