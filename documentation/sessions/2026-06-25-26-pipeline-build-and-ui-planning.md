@@ -106,3 +106,94 @@ The user shared screenshots of their company's ReportPortal instance to give a r
 1. Grouping by build requires EXEC_ID. Our current 20 results all have EXEC_ID populated — confirm this holds for all 226K target rows before building the launches view.
 2. The approve/override workflow needs a backend endpoint to update the SQLite record and potentially re-add confirmed rows to the knowledge base. Not yet designed.
 3. Speed problem still unresolved — fast path or Groq needed before the UI can show real data at scale.
+
+---
+
+## 2026-06-26 — Dashboard Wired to Real Data, Speed Optimized
+
+### Context
+
+With the UI design direction decided, this session built the full working dashboard: Flask backend serving the Claude Design template, real classification data flowing through the API, and several data quality issues fixed that only appeared when looking at real rows in the UI.
+
+### Decisions Made
+
+- **Flask serves both static files and JSON API** — **Why:** No separate frontend build step, no webpack, no node. The template (`index.html` + `support.js`) is served as static files from `dashboard/`. The DC runtime (support.js) handles all React rendering in the browser. This keeps the backend trivially simple — two real API endpoints plus a catch-all static route. Considered FastAPI but Flask was already familiar and the API is tiny.
+
+- **Switch Analyst model from llama3.1 (8B) to llama3.2:3b** — **Why:** Speed. llama3.1 averaged ~42s/row, llama3.2:3b averages ~23s/row — roughly 1.8× faster with no perceptible quality difference on structured classification with an explicit system prompt. The task is rule-following, not open-ended reasoning, so the smaller model is sufficient.
+
+- **Fast-path: skip LLM entirely for empty-remarks rows** — **Why:** 55.1% of the 226K target rows (124,486 rows) have no FAILURE_REMARKS. For those rows, vector similarity retrieval is noise — there is nothing to embed, so cosine similarity scores cluster around 30% regardless of label. For rows where INTRIM_STATUS maps to a hard domain rule, we can apply that rule directly with 0.95 confidence and skip both retrieval and LLM. This cut projected total time from ~110 days to ~26 hours for the full dataset. The fast-path only fires when: (a) FAILURE_REMARKS is empty AND (b) INTRIM_STATUS has a hard rule.
+
+- **Store all 5 individual FAISS scores, not just the top score** — **Why:** The initial pipeline stored only `top_similarity`. The UI needs per-neighbor scores to show the similarity bar chart in the expanded TC card. Adding `neighbor_ids` and `neighbor_scores` columns required a schema change and re-run, which is why this was deferred until the UI revealed the gap.
+
+- **Approve/override is in-memory only (not persisted to DB)** — **Why:** The interaction model is designed but the backend write endpoint doesn't exist yet. The UI allows accept/override and shows a "Reviewed" confirmation, but closing the page loses that state. This is an accepted limitation at this stage — the primary goal was to demonstrate the classification output, not build a full human review workflow.
+
+### Logic & Approach
+
+Several data quality issues only surfaced when looking at real rows in the UI, not from inspecting the DB directly:
+
+- **"nan" in Failure Remarks**: Python's `float('nan')` serializes to the string `"nan"`, which is truthy so the `or ""` fallback didn't catch it. Both the pipeline (save path) and Flask API needed an explicit `.lower() == "nan"` check.
+- **KB-1/KB-2 placeholders**: The initial pipeline only stored the top neighbor's score. The detail card showed "KB-1, KB-2…" because there was no TC-ID data to show. Required storing the full list of neighbor TC-IDs.
+- **Logo 404**: The logo at `agents/Logo/MO_Logo.png` is outside the `dashboard/` directory Flask served. Fixed with a dedicated `/uploads/MO_Logo.png` route pointing to the correct path.
+- **"nan" status shown in Failure Remarks**: Empty remarks showed "nan" because `str(float('nan'))` passes a truthiness check that `"" or fallback` doesn't catch.
+
+The pattern here is a principle worth noting: **the UI is a data quality checker**. Issues that were invisible in raw DB rows became immediately obvious when displayed. Running the UI after any pipeline change is a cheap way to catch silent data problems.
+
+### What Was Done
+
+- Built `dashboard/app.py` — Flask server with `/api/builds` (summary list) and `/api/builds/<exec_id>` (test case detail) endpoints, `parse_neighbors()` function that maps real TC-IDs and scores to the UI's neighbor format
+- Added `neighbor_ids` and `neighbor_scores` columns to the SQLite schema in `pipeline_runner.py`
+- Implemented fast-path in the pipeline runner (no LLM, no retrieval, direct domain-rule application)
+- Fixed "nan" remarks in both pipeline save path and Flask API response
+- Switched Analyst model to `llama3.2:3b`
+- Wired JIRA URL to `https://mediaocean.atlassian.net/browse/`
+
+### Tradeoffs
+
+The fast-path skips retrieval entirely for empty-remarks rows. This is correct when INTRIM_STATUS is decisive (OOS, MAINTAINED, BLOCKED), but could be wrong for rows where INTRIM_STATUS is ambiguous (SCHEDULED, IN-PROGRESS, NOT-STARTED) and there's no FAILURE_REMARKS. Those rows currently fall through to the full LLM path with empty context, which produces low-signal classifications. Worth revisiting whether USER_REMARKS alone can serve as the embedding text for those cases.
+
+Approve/override not persisting to DB is a real gap. If this tool is used for regular regression runs, engineers will want their review decisions to carry forward and potentially feed back into the knowledge base as new labeled examples.
+
+### Relationships
+
+- Speed decisions connect directly to the 226K scale problem discussed in the previous session
+- The fast-path uses `INTRIM_RULES` and `CATEGORY_MAP` imported from `decision_agent.py` — this creates a direct coupling between the pipeline runner and the decision agent's domain rules. If rules change, fast-path behavior changes automatically.
+- `neighbor_ids` / `neighbor_scores` schema change is backwards-incompatible — the DB must be re-created from scratch if you have existing results (the pipeline drops and recreates the table on each run, so this is safe)
+
+### Open Questions
+
+1. Should USER_REMARKS be used as the embedding text for rows where FAILURE_REMARKS is empty but INTRIM_STATUS is ambiguous? This could improve classification quality for ~30% of empty-remarks rows.
+2. The approve/override needs a `PATCH /api/classifications/<id>` endpoint to persist decisions. Should confirmed rows be added back to the FAISS knowledge base?
+3. All 20 sample rows were classified ACCEPT. Running on 100+ rows will likely surface REVIEW and REJECT cases — those are the interesting edge cases to examine.
+
+---
+
+## 2026-06-26 — Dashboard UI Readability Polish
+
+### Context
+
+After the dashboard was working and showing real data, two rounds of size increases were applied to make all text legible at normal browser zoom. The initial Claude Design template used sizes (9–12px) appropriate for a dense analytics tool on a large monitor — too small for comfortable reading in a demo or review context.
+
+### Decisions Made
+
+- **Increase every text layer systematically, not just headlines** — **Why:** The first ask was "increase card size." We increased headline numbers (to 72px) but left labels, sublabels, column headers, row text, and expanded-card content at their original small sizes. This created a mismatch: huge numbers, tiny context. The correct fix was to increase all layers proportionally. Final sizes: card labels 16px, card subtext 15px, column headers 13–15px, table row text 13–15px, expanded detail 13–14px.
+
+- **Widen the Status column from 85px → 120px, add `white-space:nowrap`** — **Why:** "NOT-STARTED" is 11 characters and was wrapping to two lines inside the 85px column. This looked broken and misaligned the entire row. The fix is both the column width (to fit the longest possible status value) and explicit `white-space:nowrap` on the badge so it can never wrap regardless of column width.
+
+- **Increase TC row height from 54px → 68px** — **Why:** With 14–15px text the previous 54px row was too cramped. 68px gives comfortable vertical padding without making the table feel sparse.
+
+### What Was Done
+
+- Main dashboard view: card label text 11px → 16px, card subtext 11px → 15px, column headers 10px → 13px, build name 14px → 20px, build ID/date 11–12px → 14–16px, failed count subtext 9px → 13px, AI % 12px → 18px, "need review" text 11px → 14px, taxonomy legend 10–11px → 13–14px
+- Detail view: build header name 15px → 20px, build stats 18px → 24px, sidebar section headers 10px → 13px, inputs/selects 12px → 14px, table column headers 10px → 15px, TC row cells 11–12px → 13–15px, expanded card headers 10px → 13px, reasoning text 12px → 14px, action buttons 12px → 14px
+- Status column: 85px → 120px, `white-space:nowrap` on badge
+
+### Tradeoffs
+
+Larger text means the table needs more horizontal space. The `min-width` on the table container was increased from 920px to 960px, and the page will scroll horizontally on narrow viewports. This is acceptable — this tool is meant to be used on a laptop or monitor, not on a phone.
+
+The TC row grid columns are now fixed pixel widths (not flexible). If very long test names appear, they truncate with ellipsis. This is the right behavior for a data table but means some names may not be fully visible without expanding the row.
+
+### Open Questions
+
+1. At the current sizes, the Status column still shows badges inline. If a longer status value is added in future (the DB has "IN-PROGRESS", "NOT-STARTED", "SCHEDULED" etc.), 120px should still be sufficient — but worth verifying when running more data.
+2. The sidebar is currently fixed at 248px. With larger text in sidebar labels, it may start feeling tight. May need to widen to 280px when more filter options are added.
