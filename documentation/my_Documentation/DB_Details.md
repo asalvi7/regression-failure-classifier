@@ -113,21 +113,7 @@
 | `DATA-ISSUE` | 227 | Labeled |
 | **Total labeled** | **6,104** | |
 
-### Execution Runs (EXEC_ID — top 10)
 
-| EXEC_ID | Rows |
-|---|---|
-| UI_NTV_26_3 | 970 |
-| UI_NTV_26_4 | 968 |
-| UI_FullRun_NTV_May20 | 961 |
-| UI_NTV_UserFullRun | 953 |
-| UI_NTV_26_2 | 905 |
-| UI_NTV_26_1 | 890 |
-| UI_NTV_25_7 | 807 |
-| UI_NTV_25_6 | 745 |
-| UI_NTV_25_5 | 714 |
-| UI_NTV_25_7_Redlean | 453 |
-| *(+ 21 more runs)* | — |
 
 ### Module Distribution in HIS_EXEC_REPORT
 
