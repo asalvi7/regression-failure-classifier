@@ -4,7 +4,7 @@
 
 ---
 
-## Status: Coding Phase — Retriever Agent complete, building Agent 2 (Analyst)
+## Status: Coding Phase — Full pipeline complete, UI design in progress
 
 ---
 
@@ -52,17 +52,13 @@
    - One-time script or continuous service triggered per regression run?
    - Confidence threshold for "Yet to be analyzed" fallback?
 
-3. ~~**Build Agent 1 — Retriever**~~ (complete — validating output once index build finishes)
-
-4. **Build Agent 2 — Analyst**
-   - Encode all domain rules as system prompt (including platform filter, DATA-ISSUE caveat)
-   - Input: row fields + top-5 retrieved cases → Output: evidence summary + initial label
-
-5. **Build Agent 3 — Decision Maker**
-   - Input: evidence from Analyst → Output: final label + confidence score + reasoning
-   - If confidence < threshold → output "Yet to be analyzed"
-
-6. **Run on 24 unlabeled rows** and validate output with team
+3. ~~**Build Agent 1 — Retriever**~~ ✅
+4. ~~**Build Agent 2 — Analyst**~~ ✅ (Ollama + Llama 3.1, local, free)
+5. ~~**Build Agent 3 — Decision Maker**~~ ✅ (confidence gate + hard INTRIM_STATUS rules)
+6. ~~**Pipeline Runner**~~ ✅ (20-row validation complete, results in SQLite/DBeaver)
+7. ~~**Taxonomy upgrade**~~ ✅ (ENV-ISSUE split into PERF-ISSUE + SYNC-ISSUE)
+8. **UI** — Claude Design prompt written, mockup pending
+9. **Speed optimisation** — fast path + smaller model or Groq needed for 226K rows
 
 7. **ENV-ISSUE re-labeling pass** (post-validation)
    - Run classifier over 2,659 ENV-ISSUE rows to split into Performance vs Sync
