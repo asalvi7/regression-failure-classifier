@@ -296,18 +296,19 @@ class IngestionAgent:
 
     def get_target_rows(self) -> pd.DataFrame:
         """
-        Unlabeled non-PASSED rows the classifier must predict.
+        Unlabeled rows with failure text that the classifier must predict.
 
         Filters:
           1. No AUTO_FAILURE_REASON
-          2. INTRIM_STATUS not in passing/inactive states
+          2. INTRIM_STATUS not PASSED
+          3. FAILURE_REMARKS must be present — empty remarks means the test
+             passed directly, so there is nothing to classify
         """
         df = self.build_reference_table()
 
-        exclude_statuses = {"PASSED"}
-
         df = df[df["AUTO_FAILURE_REASON"].fillna("").str.strip() == ""]
-        df = df[~df["INTRIM_STATUS"].isin(exclude_statuses)]
+        df = df[df["INTRIM_STATUS"] != "PASSED"]
+        df = df[df["FAILURE_REMARKS"].fillna("").str.strip() != ""]
 
         print(f"[IngestionAgent] Target rows           → {len(df):,} rows to classify")
         return df.reset_index(drop=True)
