@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from agents.ingestion_agent import IngestionAgent
 from agents.retriever_agent  import RetrieverAgent
 from agents.analyst_agent    import AnalystAgent
-from agents.decision_agent   import DecisionAgent, INTRIM_RULES, CATEGORY_MAP
+from agents.decision_agent   import DecisionAgent
 
 DB_PATH = Path(__file__).parent / "results" / "classifications.db"
 
@@ -145,31 +145,12 @@ def run(n: int = 20, fresh: bool = False):
 
         print(f"[{i:>2}/{n}]  TC_ID: {tc_id:<8}  STATUS: {status:<15}", end="  ", flush=True)
 
-        remarks = str(row.get("FAILURE_REMARKS", "") or "").strip()
-        has_remarks = remarks and remarks.lower() != "nan"
-
-        if not has_remarks and status.upper() in INTRIM_RULES:
-            # ── FAST PATH: no error text — apply domain rule directly, skip LLM ──
-            label = INTRIM_RULES[status.upper()]
-            verdict = {
-                "tc_id"         : tc_id,
-                "category"      : CATEGORY_MAP[label],
-                "final_label"   : label,
-                "confidence"    : 0.95,
-                "decision"      : "ACCEPT",
-                "reasoning"     : f"FAST-PATH: No FAILURE_REMARKS. INTRIM_STATUS={status} → {label} by domain rule.",
-                "flag_for_human": False,
-            }
-            save_result(conn, row, verdict, neighbors=None)
-            print(f"→ {label:<15}  conf: 0.95  [ACCEPT]  ⚡ fast-path  ({time.time()-t_row:.0f}s)")
-        else:
-            # ── FULL PATH: has error text — run retriever + LLM ──
-            neighbors = retriever.query(row, top_k=5)
-            analyst_result = analyst.analyze(row, neighbors)
-            verdict = decision.decide(row, analyst_result)
-            save_result(conn, row, verdict, neighbors)
-            print(f"→ {verdict['final_label']:<15}  conf: {verdict['confidence']:.2f}  "
-                  f"[{verdict['decision']}] {'⚑' if verdict['flag_for_human'] else ' '}  ({time.time()-t_row:.0f}s)")
+        neighbors = retriever.query(row, top_k=5)
+        analyst_result = analyst.analyze(row, neighbors)
+        verdict = decision.decide(row, analyst_result)
+        save_result(conn, row, verdict, neighbors)
+        print(f"→ {verdict['final_label']:<15}  conf: {verdict['confidence']:.2f}  "
+              f"[{verdict['decision']}] {'⚑' if verdict['flag_for_human'] else ' '}  ({time.time()-t_row:.0f}s)")
 
         # Track stats
         results_summary[verdict["decision"]] = results_summary.get(verdict["decision"], 0) + 1
